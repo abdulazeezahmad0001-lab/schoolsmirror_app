@@ -3,8 +3,6 @@ name: Build Flutter APK
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -35,9 +33,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # Removed --stacktrace from this line
-      - name: Build APK
-        run: flutter build apk --release
+      # Auto-accept all Android licenses to prevent SDK errors
+      - name: Accept Android Licenses
+        run: yes | flutter doctor --android-licenses || true
+
+      # Increase JVM Memory to prevent OutOfMemory errors
+      - name: Build APK (With increased memory)
+        run: echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=2g" >> android/gradle.properties && flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
