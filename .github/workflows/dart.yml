@@ -14,12 +14,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # FIX: Using Java 12 instead of 17 for better Flutter compatibility
+      # Gradle 9.x strictly requires Java 17 (not 12)
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '12'
+          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -29,9 +29,13 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      # FIX: Accept Android SDK licenses automatically
-      - name: Accept Android licenses
-        run: yes | flutter doctor --android-licenses || true
+      # Clear out any old build caches that might be causing issues
+      - name: Clean Flutter and Gradle
+        run: |
+          flutter clean
+          cd android
+          chmod +x gradlew
+          ./gradlew clean
 
       - name: Build APK
         run: flutter build apk --release
