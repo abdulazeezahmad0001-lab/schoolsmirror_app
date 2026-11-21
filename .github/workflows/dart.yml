@@ -14,6 +14,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # Use Java 17 for modern Gradle
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -32,12 +33,13 @@ jobs:
       - name: Clean Flutter
         run: flutter clean
 
-      # Force execution permissions on the gradle file just in case
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
+      # This might fail if a previous build left a bad cache, but it usually helps
+      - name: Stop Gradle Daemon
+        run: cd android && ./gradlew --stop
 
+      # Added --stacktrace so we can see the REAL error if it fails
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
