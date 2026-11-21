@@ -9,11 +9,9 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      # Updated to v5 to fix Node 24 deprecation
       - name: Checkout Repository
         uses: actions/checkout@v5
 
-      # Updated to v5 to fix deprecation
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -35,19 +33,18 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Accept Android Licenses
-        run: yes | flutter doctor --android-licenses || true
-
+      # This is the exact line you asked for, wrapped in the full workflow
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --android-skip-build-dependency-validation 2>&1 | tee build.log
 
-      # This will print the folder contents so we can see exactly what Flutter named the file
-      - name: List APK Output
-        run: ls -R build/app/outputs/flutter-apk/
+      - name: Show Build Error (If Failed)
+        if: failure()
+        run: |
+          echo "Here is the actual error from Gradle:"
+          grep -i -A 15 "What went wrong" build.log || tail -n 50 build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          # Using a wildcard just in case Flutter names it slightly differently
           path: build/app/outputs/flutter-apk/*.apk
