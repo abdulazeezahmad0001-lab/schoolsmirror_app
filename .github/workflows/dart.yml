@@ -9,11 +9,13 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
+      # Updated to v5 to fix Node 24 deprecation
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
+      # Updated to v5 to fix deprecation
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -22,7 +24,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          cache: false # <--- Forces a fresh Flutter download
+          cache: false 
 
       - name: Get dependencies
         run: flutter pub get
@@ -36,14 +38,10 @@ jobs:
       - name: Accept Android Licenses
         run: yes | flutter doctor --android-licenses || true
 
-      # FORCE a completely clean Gradle build
-      - name: Clean Gradle
-        run: cd android && ./gradlew clean
-
       - name: Build APK
         run: flutter build apk --release
 
-      # This step will print all files inside the output folder to the log so we can see the exact name
+      # This will print the folder contents so we can see exactly what Flutter named the file
       - name: List APK Output
         run: ls -R build/app/outputs/flutter-apk/
 
@@ -51,4 +49,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          # Using a wildcard just in case Flutter names it slightly differently
+          path: build/app/outputs/flutter-apk/*.apk
