@@ -6,13 +6,12 @@ plugins {
 }
 
 android {
-    namespace = "com.example.schoolsmirror_app"
-    compileSdk = 34
-    ndkVersion = flutter.ndkVersion
+    namespace "com.example.schoolsmirror_app"
+    compileSdk 34
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled true
     }
 
@@ -21,16 +20,16 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.schoolsmirror_app"
-        minSdk = 23 // Required for camera and local_auth
-        targetSdk = 34
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        applicationId "com.example.schoolsmirror_app"
+        minSdk 23
+        targetSdk 34
+        versionCode flutter.versionCode
+        versionName flutter.versionName
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.debug
+            signingConfig signingConfigs.debug
         }
     }
 }
