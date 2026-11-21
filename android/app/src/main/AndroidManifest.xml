@@ -7,10 +7,20 @@
     <!-- Required for HTTPS calls to schoolsmirror.com -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- NEW: Required for camera (taking photos) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- NEW: Required for geolocator (location) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <application
         android:label="SchoolsMirror"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon"
+        android:usesCleartextTraffic="true">  <!-- Added cleartext for network stability -->
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"

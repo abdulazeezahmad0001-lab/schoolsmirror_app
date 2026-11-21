@@ -1,77 +1,90 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>SchoolsMirror</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>schoolsmirror_app</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
-	<key>CFBundleSignature</key>
-	<string>????</string>
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-
-	<!-- ============================================ -->
-	<!-- BIOMETRIC / FACE ID PERMISSION               -->
-	<!-- ============================================ -->
-	<key>NSFaceIDUsageDescription</key>
-	<string>SchoolsMirror uses Face ID so you can sign in quickly and securely without typing your password every time.</string>
-
-	<!-- ============================================ -->
-	<!-- NETWORK — allow HTTPS to schoolsmirror.com   -->
-	<!-- (iOS allows HTTPS by default, but this      -->
-	<!--  ensures no surprises if any sub-request    -->
-	<!--  tries an older API)                         -->
-	<!-- ============================================ -->
-	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<false/>
-		<key>NSExceptionDomains</key>
+		<key>CFBundleDevelopmentRegion</key>
+		<string>$(DEVELOPMENT_LANGUAGE)</string>
+		<key>CFBundleDisplayName</key>
+		<string>SchoolsMirror</string>
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+		<key>CFBundleName</key>
+		<string>schoolsmirror_app</string>
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$(FLUTTER_BUILD_NAME)</string>
+		<key>CFBundleSignature</key>
+		<string>????</string>
+		<key>CFBundleVersion</key>
+		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>LSRequiresIPhoneOS</key>
+		<true/>
+		<key>UILaunchStoryboardName</key>
+		<string>LaunchScreen</string>
+		<key>UIMainStoryboardFile</key>
+		<string>Main</string>
+		<key>UISupportedInterfaceOrientations</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+		<key>UISupportedInterfaceOrientations~ipad</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationPortraitUpsideDown</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+		<key>CADisableMinimumFrameDurationOnPhone</key>
+		<true/>
+		<key>UIApplicationSupportsIndirectInputEvents</key>
+		<true/>
+		<!-- ============================================ -->
+		<!-- BIOMETRIC / FACE ID PERMISSION               -->
+		<!-- ============================================ -->
+		<key>NSFaceIDUsageDescription</key>
+		<string>SchoolsMirror uses Face ID so you can sign in quickly and securely without typing your password every time.</string>
+		<!-- ============================================ -->
+		<!-- NEW: CAMERA & PHOTO LIBRARY PERMISSIONS      -->
+		<!-- ============================================ -->
+		<key>NSCameraUsageDescription</key>
+		<string>This app requires access to the camera to take photos for profile pictures and question uploads.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>This app requires access to your photo library to upload images for questions and profile pictures.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>This app requires access to the microphone when recording video.</string>
+		<!-- ============================================ -->
+		<!-- NEW: LOCATION PERMISSIONS                    -->
+		<!-- ============================================ -->
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>This app requires access to your location to verify your attendance and school zone.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>This app requires access to your location to verify your attendance and school zone.</string>
+		<!-- ============================================ -->
+		<!-- NETWORK — allow HTTPS to schoolsmirror.com   -->
+		<!-- ============================================ -->
+		<key>NSAppTransportSecurity</key>
 		<dict>
-			<key>schoolsmirror.com</key>
+			<key>NSAllowsArbitraryLoads</key>
+			<false/>
+			<key>NSExceptionDomains</key>
 			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
+				<key>schoolsmirror.com</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<false/>
+					<key>NSIncludesSubdomains</key>
+					<true/>
+				</dict>
 			</dict>
 		</dict>
+		<key>UIStatusBarHidden</key>
+		<false/>
 	</dict>
-</dict>
 </plist>
