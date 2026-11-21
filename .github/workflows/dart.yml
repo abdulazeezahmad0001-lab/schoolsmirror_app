@@ -17,7 +17,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'   # AGP 9.3 lint calls Java 21 APIs (List.removeLast); JDK 17 crashes it
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
