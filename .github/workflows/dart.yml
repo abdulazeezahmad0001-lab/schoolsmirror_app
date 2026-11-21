@@ -8,6 +8,7 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v5
@@ -22,20 +23,22 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          cache: false 
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
 
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Clean Flutter
-        run: flutter clean
-
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # This is the exact line you asked for, wrapped in the full workflow
       - name: Build APK
-        run: flutter build apk --release --android-skip-build-dependency-validation 2>&1 | tee build.log
+        shell: bash
+        run: |
+          set -o pipefail   # without this, "| tee" hides a failed build and the step shows green
+          flutter build apk --release 2>&1 | tee build.log
 
       - name: Show Build Error (If Failed)
         if: failure()
@@ -44,7 +47,8 @@ jobs:
           grep -i -A 15 "What went wrong" build.log || tail -n 50 build.log
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
