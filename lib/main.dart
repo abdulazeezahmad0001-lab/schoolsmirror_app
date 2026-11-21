@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'api/api_client.dart';
@@ -10,6 +11,7 @@ import 'screens/login_screen.dart';
 import 'screens/student_home.dart';
 import 'screens/admin_home.dart';
 import 'screens/onboarding_screen.dart'; // <-- ADDED IMPORT
+import 'screens/push_notification_service.dart'; // push notifications
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +20,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Push notifications: lets Firebase deliver messages while the app is closed or in the background
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Load saved token (if any)
   await ApiClient.loadToken();

@@ -11,6 +11,7 @@ import '../api/api_client.dart';
 import 'flutter_users_screen.dart'; // Manage Users (add student/teacher/subadmin + list)
 import 'flutter_admin_module_screen.dart';
 import 'flutter_add_exam_screen.dart';
+import 'flutter_result_upload_screen.dart'; // Result Upload (students -> session/term -> scores, works offline)
 import 'flutter_assign_subject_screen.dart';
 import 'flutter_add_homework_screen.dart';
 import 'flutter_cumulative_results_screen.dart';
@@ -21,6 +22,7 @@ import 'flutter_result_template_screen.dart'; // Result Template (school details
 import 'flutter_teacher_in_out_screen.dart'; // Teacher In/Out (face + GPS)
 import 'flutter_all_attendance_screen.dart'; // Staff Attendance (admin view)
 import 'flutter_upload_signature_screen.dart'; // Upload Signature
+import 'flutter_position_of_student_screen.dart'; // Class Ranking (student positions)
 // import 'flutter_class_management_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -580,6 +582,18 @@ class _AdminHomeState extends State<AdminHome> {
       return;
     }
 
+    // ===== RESULT UPLOAD (students -> session/term -> scores + traits, with offline upload) =====
+    if (leaf.route == '/admin/result-upload') {
+      if (modToken == null || modToken.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session expired. Please log out and log back in.')));
+        return;
+      }
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => FlutterResultUploadScreen(token: modToken),
+      ));
+      return;
+    }
+
     if (leaf.route == '/admin/assign-subject') {
       if (modToken == null || modToken.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session expired. Please log out and log back in.')));
@@ -665,6 +679,17 @@ class _AdminHomeState extends State<AdminHome> {
       }
       await Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => FlutterUploadSignatureScreen(token: modToken),
+      ));
+      return;
+    }
+
+    if (leaf.route == '/admin/class-ranking') {
+      if (modToken == null || modToken.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session expired. Please log out and log back in.')));
+        return;
+      }
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => FlutterPositionOfStudentScreen(token: modToken),
       ));
       return;
     }

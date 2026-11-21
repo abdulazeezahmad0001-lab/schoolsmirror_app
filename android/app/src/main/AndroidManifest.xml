@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- NEW: Android 13+ needs this to show push notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:label="SchoolsMirror"
         android:name="${applicationName}"
@@ -39,6 +42,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- NEW: push notifications use this channel when the app is closed (must match kPushChannelId / PUSH_CHANNEL_ID) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="schoolsmirror_results" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
