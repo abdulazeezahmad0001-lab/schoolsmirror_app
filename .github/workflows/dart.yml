@@ -14,7 +14,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Gradle 9.x strictly requires Java 17 (not 12)
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -25,17 +24,17 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Get dependencies
         run: flutter pub get
 
-      # Clear out any old build caches that might be causing issues
-      - name: Clean Flutter and Gradle
-        run: |
-          flutter clean
-          cd android
-          chmod +x gradlew
-          ./gradlew clean
+      - name: Clean Flutter
+        run: flutter clean
+
+      # Force execution permissions on the gradle file just in case
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
 
       - name: Build APK
         run: flutter build apk --release
