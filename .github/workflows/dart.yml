@@ -33,13 +33,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # Auto-accept all Android licenses to prevent SDK errors
       - name: Accept Android Licenses
         run: yes | flutter doctor --android-licenses || true
 
-      # Increase JVM Memory to prevent OutOfMemory errors
-      - name: Build APK (With increased memory)
-        run: echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=2g" >> android/gradle.properties && flutter build apk --release
+      # The 2>&1 | tee build.log saves the output so we can read it if it fails
+      - name: Build APK
+        run: flutter build apk --release 2>&1 | tee build.log
+
+      # THIS WILL PRINT THE ACTUAL ERROR IN THE SUMMARY IF IT FAILS
+      - name: Show Build Error (If Failed)
+        if: failure()
+        run: grep -i -A 10 "What went wrong" build.log || tail -n 50 build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
