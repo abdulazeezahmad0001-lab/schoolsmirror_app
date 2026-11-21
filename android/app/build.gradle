@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.schoolsmirror_app"
-        minSdk = 23
+        minSdk = 23 // Required for camera and local_auth
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
