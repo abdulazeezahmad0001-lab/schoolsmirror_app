@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -32,16 +32,12 @@ jobs:
       - name: Clean Flutter
         run: flutter clean
 
-      # THIS IS THE FIX: Grant execute permission to gradlew
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # Now stop the daemon and build
-      - name: Stop Gradle Daemon
-        run: cd android && ./gradlew --stop
-
+      # Removed --stacktrace from this line
       - name: Build APK
-        run: flutter build apk --release --stacktrace
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
