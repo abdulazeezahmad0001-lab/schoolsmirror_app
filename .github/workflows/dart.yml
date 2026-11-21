@@ -22,7 +22,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          cache: true
+          cache: false # <--- Changed to false to force a fresh build
 
       - name: Get dependencies
         run: flutter pub get
@@ -36,11 +36,9 @@ jobs:
       - name: Accept Android Licenses
         run: yes | flutter doctor --android-licenses || true
 
-      # The 2>&1 | tee build.log saves the output so we can read it if it fails
       - name: Build APK
         run: flutter build apk --release 2>&1 | tee build.log
 
-      # THIS WILL PRINT THE ACTUAL ERROR IN THE SUMMARY IF IT FAILS
       - name: Show Build Error (If Failed)
         if: failure()
         run: grep -i -A 10 "What went wrong" build.log || tail -n 50 build.log
@@ -49,4 +47,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          # Changed the path to look for any APK in the folder
+          path: build/app/outputs/flutter-apk/*.apk
