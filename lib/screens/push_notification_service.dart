@@ -152,6 +152,26 @@ class PushNotificationService {
 
   Future<void> markAllRead(String authToken) => _PushApi.post(authToken, 'mark_read', {'all': '1'});
 
+  /// Checklist from the server: key file, Firebase login, registered phones.
+  Future<Map<String, dynamic>> status(String authToken) async {
+    final r = await _PushApi.post(authToken, 'status');
+    if (r['network'] == true) {
+      return {'ready': false, 'message': 'No internet connection.', 'checks': <Map<String, dynamic>>[]};
+    }
+    final data = r['data'] is Map ? Map<String, dynamic>.from(r['data']) : <String, dynamic>{};
+    final checks = (data['checks'] is List ? data['checks'] as List : []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    // what this phone itself knows
+    checks.add({'ok': _lastFcmToken != null, 'title': 'Phone received a Firebase token', 'hint': _lastFcmToken != null ? 'Token starts with ${_lastFcmToken!.substring(0, 12)}…' : 'Allow notifications for the app and reopen it.'});
+    return {'ready': data['ready'] == true && _lastFcmToken != null, 'message': '${r['message'] ?? ''}', 'checks': checks};
+  }
+
+  /// STAFF apps: call this right after an assignment is saved, so the class gets a push notification.
+  /// Returns the server's message (e.g. "Notification sent." or "Students were already notified…").
+  Future<String> notifyAssignmentPublished(String authToken, int assignmentId, {bool force = false}) async {
+    final r = await _PushApi.post(authToken, 'notify_assignment', {'assignment_id': '$assignmentId', if (force) 'force': '1'});
+    return '${r['message'] ?? 'No answer from the server'}';
+  }
+
   /// Sends a test push to this user's own devices. Returns the server's message.
   Future<String> sendTest(String authToken) async {
     final r = await _PushApi.post(authToken, 'send_test');

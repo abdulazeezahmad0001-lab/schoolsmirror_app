@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/app_flags.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -33,10 +33,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const _primary = Color(0xFF3A57A5);
 
+  @override
+  void initState() {
+    super.initState();
+    // Mark it as seen the moment it is shown: a new install sees it once, never again.
+    AppFlags.markOnboardingSeen();
+  }
+
   void _completeOnboarding() async {
-    // Save that the user has seen the onboarding
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('has_seen_onboarding', true);
+    await AppFlags.markOnboardingSeen();
 
     if (mounted) {
       // Replace with your login route

@@ -50,7 +50,7 @@ class _Api {
   static bool shouldRetry(Map<String, dynamic> d) {
     final m = '${d['message'] ?? ''}';
     return d['success'] != true &&
-        (m == 'Unexpected server response' ||
+        (m.startsWith('Unexpected server response') ||
             m == 'Signature image is required.' ||
             m.startsWith('The server received this request as') ||
             m.startsWith('Missing token'));
@@ -67,7 +67,7 @@ class _Api {
         final req = http.MultipartRequest('POST', uri)..fields.addAll({'token': token, 'action': action, ...fields});
         if (bytes != null) req.files.add(http.MultipartFile.fromBytes('signature', bytes, filename: filename ?? 'signature.jpg'));
         final res = await http.Response.fromStream(await req.send().timeout(const Duration(seconds: 90)));
-        last = decode(res.body);
+        last = decode(res.body, res.statusCode);
         if (shouldRetry(last) && _apiIdx < _apiUrls.length - 1) {
           _apiIdx++;
           continue;
@@ -84,13 +84,16 @@ class _Api {
     return last;
   }
 
-  static Map<String, dynamic> decode(String body) {
+  static Map<String, dynamic> decode(String body, [int? status]) {
     try {
       final i = body.indexOf('{');
       final d = jsonDecode(i > 0 ? body.substring(i) : body);
       if (d is Map<String, dynamic>) return d;
     } catch (_) {}
-    return {'success': false, 'message': 'Unexpected server response'};
+    // Not JSON: show the HTTP status and the start of what the server sent, so the real cause is visible
+    var snippet = body.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (snippet.length > 140) snippet = '${snippet.substring(0, 140)}...';
+    return {'success': false, 'message': 'Unexpected server response (HTTP ${status ?? '?'}): ${snippet.isEmpty ? 'empty response' : snippet}'};
   }
 }
 

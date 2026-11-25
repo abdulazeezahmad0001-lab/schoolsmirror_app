@@ -24,20 +24,25 @@ import 'flutter_all_attendance_screen.dart'; // Staff Attendance (admin view)
 import 'flutter_upload_signature_screen.dart'; // Upload Signature
 import 'flutter_position_of_student_screen.dart'; // Class Ranking (student positions)
 // import 'flutter_class_management_screen.dart';
+import 'dart:ui' show ImageFilter;
+import 'sm_ui.dart';
+import 'push_notification_service.dart';
+import 'flutter_results_overview_screen.dart'; // Result Overview / finalization (+ push)
 
-// ════════════════════════════════════════════════════════════════════════════
-//  THEME
-// ════════════════════════════════════════════════════════════════════════════
-const _kPrimary = Color(0xFF4361ee);
-const _kViolet = Color(0xFF7c3aed);
-const _kDark = Color(0xFF0f172a);
-const _kBg = Color(0xFFf0f4ff);
-const _kMuted = Color(0xFF64748b);
-const _kBorder = Color(0xFFe2e8f0);
-const _kGreen = Color(0xFF10b981);
-const _kAmber = Color(0xFFf59e0b);
-const _kRose = Color(0xFFf43f5e);
-const _kCyan = Color(0xFF06b6d4);
+// ═════════════════════════════════════════════════════════════════════
+//  THEME  (dark "Aurora Glass" — see sm_ui.dart)
+//  The old names are kept so the chart painters and nav groups keep working.
+// ═════════════════════════════════════════════════════════════════════
+const _kPrimary = SM.blueLight;
+const _kViolet = SM.violet;
+const _kDark = SM.text; // main text colour (light on dark)
+const _kBg = SM.bg1;
+const _kMuted = SM.muted;
+const _kBorder = Color(0x1FFFFFFF);
+const _kGreen = SM.green;
+const _kAmber = SM.amber;
+const _kRose = SM.rose;
+const _kCyan = SM.cyan;
 
 const _chartPalette = [_kPrimary, _kViolet, _kGreen, _kAmber, _kRose, _kCyan];
 
@@ -165,9 +170,7 @@ const List<NavGroup> _navGroups = [
         roles: _adminRoles),
     NavLeaf('Class Ranking', Icons.emoji_events, '/admin/class-ranking',
         roles: _adminRoles),
-    NavLeaf('Published Result', Icons.visibility, '/admin/published-results',
-        roles: _adminRoles),
-    NavLeaf('Result Audio', Icons.graphic_eq, '/admin/result-audio',
+    NavLeaf('Result Overview', Icons.fact_check_rounded, '/admin/published-results',
         roles: _adminRoles, isNew: true),
     NavLeaf('Download Result', Icons.download, '/admin/download-results',
         roles: _adminRoles),
@@ -221,8 +224,10 @@ class AdminHome extends StatefulWidget {
 class _AdminHomeState extends State<AdminHome> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _search = TextEditingController();
+  final ScrollController _scroll = ScrollController();
 
   bool _loading = true;
+  bool _offlineData = false;
   String? _error;
   Map<String, dynamic>? _data;
   String? _sessionToken; // cached after successful login/load
@@ -235,29 +240,40 @@ class _AdminHomeState extends State<AdminHome> {
   @override
   void initState() {
     super.initState();
+    PushNotificationService.instance.setOnOpen(_onPushOpen);
     _load();
   }
 
   @override
   void dispose() {
     _search.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  Future<Map<String, dynamic>?> _readCache() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final s = p.getString('dash_cache_v1');
+      if (s == null) return null;
+      final d = jsonDecode(s);
+      return d is Map ? Map<String, dynamic>.from(d) : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _load() async {
     if (_data == null) setState(() => _loading = true);
     setState(() => _error = null);
     try {
-      // Force load the token into memory FIRST
       await ApiClient.loadToken();
-      
-      final token = ApiClient.token; // Get it from memory
-      
+      final token = ApiClient.token;
       if (token == null || token.isEmpty) {
         throw Exception('No token found. Please log out and log back in.');
       }
 
-      // Cache + persist so child screens (Add Student) always have it
+      // cache + persist so child screens always have it (also works offline)
       _sessionToken = token;
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -265,7 +281,8 @@ class _AdminHomeState extends State<AdminHome> {
         await prefs.setString('token', token);
       } catch (_) {}
 
-      print("SENDING TOKEN TO PHP: $token"); // Look at this in Chrome DevTools!
+      // push notifications: register this phone (safe to call many times)
+      PushNotificationService.instance.start(authToken: token, onOpen: _onPushOpen);
 
       final url = Uri.parse('https://schoolsmirror.com/fetch_data.php?token=$token');
       final res = await http.get(url).timeout(const Duration(seconds: 15));
@@ -275,13 +292,31 @@ class _AdminHomeState extends State<AdminHome> {
       if (json['success'] == true && json['data'] != null) {
         setState(() {
           _data = Map<String, dynamic>.from(json['data']);
+          _offlineData = false;
           _seed++;
         });
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('dash_cache_v1', jsonEncode(json['data']));
+        } catch (_) {}
       } else {
         _fail(json['message'] ?? 'Failed to load dashboard');
       }
     } catch (e) {
-      if (mounted) _fail('Network error: $e');
+      if (mounted) {
+        // offline: show the last dashboard that was loaded, so the menu and Result Upload still work
+        if (_data == null) {
+          final c = await _readCache();
+          if (c != null && mounted) {
+            setState(() {
+              _data = c;
+              _offlineData = true;
+              _seed++;
+            });
+          }
+        }
+        _fail('Network error: $e');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -289,8 +324,8 @@ class _AdminHomeState extends State<AdminHome> {
 
   void _fail(String msg) {
     setState(() => _error = msg);
-    if (_data != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (_data != null && mounted) {
+      smToast(context, _offlineData ? 'You are offline — showing saved data.' : msg, kind: SmKind.warn);
     }
   }
 
@@ -310,9 +345,7 @@ class _AdminHomeState extends State<AdminHome> {
   bool get _isTeacher => _role == _rTeacher;
   List<NavGroup> get _visibleGroups => _navGroups.where((g) => g.visibleFor(_role)).toList();
 
-  String get _roleLabel => _role == _rAdmin
-      ? 'Admin Panel'
-      : (_role == _rSub ? 'Subadmin' : 'Teacher');
+  String get _roleLabel => _role == _rAdmin ? 'Admin Panel' : (_role == _rSub ? 'Subadmin' : 'Teacher');
 
   // ── Navigation ──
   Future<void> _open(NavLeaf leaf) async {
@@ -380,6 +413,18 @@ class _AdminHomeState extends State<AdminHome> {
         final prefs = await SharedPreferences.getInstance();
         modToken = prefs.getString('auth_token') ?? prefs.getString('token');
       } catch (_) {}
+    }
+
+    // ===== RESULT OVERVIEW / FINALIZATION (with push notifications) =====
+    if (leaf.route == '/admin/published-results' || leaf.route == '/admin/results-overview') {
+      if (modToken == null || modToken.isEmpty) {
+        smToast(context, 'Session expired. Please log out and log back in.', kind: SmKind.error);
+        return;
+      }
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => FlutterResultsOverviewScreen(token: modToken!),
+      ));
+      return;
     }
 
     if (leaf.route == '/admin/add-class') {
@@ -733,400 +778,692 @@ class _AdminHomeState extends State<AdminHome> {
   }
 
   // ════════════════════════════════════════════════════════════════════════
-  //  BUILD
+  //  NEW DESIGN  ("Aurora Glass")
   // ════════════════════════════════════════════════════════════════════════
+  String get _greeting {
+    final h = DateTime.now().hour;
+    return h < 12 ? 'Good morning' : (h < 17 ? 'Good afternoon' : 'Good evening');
+  }
+
+  Future<void> _logout() async {
+    final ok = await smConfirm(context, 'Log out?', 'You will need your password (or fingerprint) to sign in again.',
+        yes: 'Log out', destructive: true, icon: Icons.logout_rounded);
+    if (ok != true) return;
+    try {
+      await PushNotificationService.instance.unregister();
+    } catch (_) {}
+    await ApiClient.logout();
+    if (mounted) Navigator.of(context).pushReplacementNamed('/');
+  }
+
+  void _onPushOpen(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final screen = '${data['screen'] ?? ''}';
+    if (screen == 'published-results' || screen == 'results') {
+      final l = _findLeaf('Result Overview');
+      if (l != null) {
+        _open(l);
+        return;
+      }
+    }
+    _openMessages();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: _kBg,
+      backgroundColor: SM.bg1,
+      extendBody: true,
       drawer: _buildDrawer(),
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          if (_maint != null && _maint!['show_banner'] == true) _buildMaintenanceBanner(),
-          Expanded(
-            child: (_loading && _data == null)
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: (_error != null && _data == null) ? _errorView() : _body(),
-                  ),
-          ),
-        ],
+      bottomNavigationBar: _dock(),
+      body: SmBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(children: [
+            _header(),
+            if (_maint != null && _maint!['show_banner'] == true) _buildMaintenanceBanner(),
+            Expanded(
+              child: (_loading && _data == null)
+                  ? const Center(child: SmLogoLoader(label: 'Loading your dashboard…'))
+                  : RefreshIndicator(
+                      color: SM.orange,
+                      backgroundColor: SM.sheet,
+                      onRefresh: _load,
+                      child: (_error != null && _data == null) ? _errorView() : _body(),
+                    ),
+            ),
+          ]),
+        ),
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  // ── header ──
+  Widget _header() {
     final unread = _num(_stats['unread_messages']).toInt();
-    final school = '${_user['schoolname'] ?? 'Admin'}';
-
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 1,
-      iconTheme: const IconThemeData(color: _kDark),
-      // Explicit hamburger so the drawer always opens (nested navigators often hide the default)
-      leading: IconButton(
-        icon: const Icon(Icons.menu, color: _kDark),
-        tooltip: 'Menu',
-        onPressed: _openDrawer,
-      ),
-      title: const Text('Dashboard', style: TextStyle(color: _kDark, fontWeight: FontWeight.bold)),
-      actions: [
-        Container(
-          margin: const EdgeInsets.only(right: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: _kGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-          child: const Row(
-            children: [
-              Icon(Icons.circle, color: _kGreen, size: 8),
-              SizedBox(width: 4),
-              Text('Live', style: TextStyle(color: _kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-            ],
-          ),
+    final school = '${_user['schoolname'] ?? 'SchoolsMirror'}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Row(children: [
+        SmIconBtn(icon: Icons.menu_rounded, onTap: _openDrawer),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_greeting, style: const TextStyle(color: SM.muted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+            Text(school, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SM.text, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -.4)),
+          ]),
         ),
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined, color: _kDark),
-              onPressed: _openMessages,
-            ),
-            if (unread > 0)
-              Positioned(
-                right: 6, top: 6,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(color: _kRose, shape: BoxShape.circle),
-                  child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-                ),
-              ),
-          ],
-        ),
+        SmIconBtn(icon: Icons.notifications_rounded, badge: unread, onTap: _openMessages),
+        const SizedBox(width: 8),
         PopupMenuButton<String>(
-          offset: const Offset(0, 50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: 'profile', child: Row(children: [Icon(Icons.person, size: 18), SizedBox(width: 8), Text('Profile')])),
-            const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout, color: Colors.red, size: 18), SizedBox(width: 8), Text('Logout', style: TextStyle(color: Colors.red))])),
-          ],
-          onSelected: (val) async {
-            if (val == 'logout') {
-              await ApiClient.logout();
-              if (mounted) Navigator.of(context).pushReplacementNamed('/');
+          offset: const Offset(0, 54),
+          color: SM.sheet,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: SM.glassLine)),
+          onSelected: (v) {
+            if (v == 'logout') {
+              _logout();
             } else {
-              await _open(NavLeaf('Profile', Icons.person, '/admin/profile'));
+              _open(const NavLeaf('Profile', Icons.person, '/admin/profile'));
             }
           },
-          child: Padding(
-            padding: const EdgeInsets.only(right: 16, left: 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: _kPrimary.withOpacity(0.1),
-                  child: const Icon(Icons.person, color: _kPrimary, size: 20),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(school, style: const TextStyle(color: _kDark, fontSize: 12, fontWeight: FontWeight.bold)),
-                    Text(_roleLabel, style: const TextStyle(color: _kMuted, fontSize: 10)),
-                  ],
-                ),
-                const Icon(Icons.arrow_drop_down, color: _kMuted, size: 16),
-              ],
-            ),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'profile', child: Row(children: const [Icon(Icons.person_rounded, size: 19, color: SM.text), SizedBox(width: 10), Text('Profile', style: TextStyle(color: SM.text))])),
+            PopupMenuItem(value: 'logout', child: Row(children: const [Icon(Icons.logout_rounded, size: 19, color: SM.rose), SizedBox(width: 10), Text('Logout', style: TextStyle(color: SM.rose))])),
+          ],
+          child: Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(gradient: SM.hot, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: SM.a(SM.orange, .35), blurRadius: 14)]),
+            child: Text(school.isEmpty ? 'S' : school.substring(0, 1).toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
           ),
         ),
-      ],
+      ]),
     );
   }
 
-  // ── Maintenance Banner ──
   Widget _buildMaintenanceBanner() {
     final m = _maint!;
     final level = m['level'] ?? 'info';
     final days = (m['days_remaining'] ?? 0) as int;
     final amount = (m['amount'] ?? 0).toDouble();
     final renewal = (m['renewal_days'] ?? 0) as int;
-    
-    final color = level == 'danger'
-        ? const Color(0xFF7f1d1d)
-        : level == 'warning'
-            ? const Color(0xFF92400e)
-            : _kDark;
-
+    final c = level == 'danger' ? SM.rose : (level == 'warning' ? SM.amber : SM.cyan);
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: color,
-      child: Row(
-        children: [
-          Icon(days > 0 ? Icons.schedule : Icons.warning_amber_rounded, color: Colors.amber, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  days > 0 ? 'Portal Maintenance Due in $days days' : 'PORTAL OVERDUE - Payment Required',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Pay ₦${amount.toStringAsFixed(2)} to renew for $renewal days.',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () {},
-            style: TextButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white),
-            child: const Text('Pay Now', style: TextStyle(fontSize: 11)),
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: SM.a(c, .14), borderRadius: BorderRadius.circular(20), border: Border.all(color: SM.a(c, .5))),
+      child: Row(children: [
+        Icon(days > 0 ? Icons.schedule_rounded : Icons.warning_amber_rounded, color: c, size: 26),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(days > 0 ? 'Portal maintenance due in $days days' : 'Portal overdue — payment required', style: const TextStyle(color: SM.text, fontWeight: FontWeight.w800, fontSize: 13.5)),
+            const SizedBox(height: 2),
+            Text('Pay ₦${amount.toStringAsFixed(2)} to renew for $renewal days.', style: const TextStyle(color: SM.muted, fontSize: 12)),
+          ]),
+        ),
+      ]),
     );
   }
 
   Widget _errorView() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        const SizedBox(height: 140),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
-                const SizedBox(height: 12),
-                Text(_error ?? '', textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton(onPressed: _load, child: const Text('Retry')),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+    return ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(24), children: [
+      const SizedBox(height: 70),
+      SmGlass(
+        radius: 28,
+        padding: const EdgeInsets.all(24),
+        child: Column(children: [
+          Container(width: 70, height: 70, decoration: BoxDecoration(shape: BoxShape.circle, color: SM.a(SM.amber, .16), border: Border.all(color: SM.a(SM.amber, .5))), child: const Icon(Icons.wifi_off_rounded, color: SM.amber, size: 32)),
+          const SizedBox(height: 16),
+          const Text('Can’t reach the server', style: TextStyle(color: SM.text, fontSize: 19, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(_error ?? '', textAlign: TextAlign.center, style: const TextStyle(color: SM.muted, fontSize: 13.5)),
+          const SizedBox(height: 20),
+          SmButton(label: 'Try again', icon: Icons.refresh_rounded, onTap: _load),
+          const SizedBox(height: 10),
+          SmButton(label: 'Open Result Upload offline', icon: Icons.cloud_off_rounded, outline: true, onTap: () => _open(const NavLeaf('Result Upload', Icons.upload_file, '/admin/result-upload'))),
+        ]),
+      ),
+    ]);
   }
 
   Widget _body() {
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= 800;
-      final contentW = math.min(c.maxWidth, 1200.0) - 32;
+      final contentW = math.min(c.maxWidth, 1100.0) - 32;
       return SingleChildScrollView(
+        controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 130),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildPageHeader(),
-                const SizedBox(height: 16),
-                _buildWelcomeBanner(),
-                const SizedBox(height: 16),
-                _buildStatCards(wide),
-                const SizedBox(height: 22),
-                _buildQuickActions(),
-                if (!_isTeacher) ...[
-                  _buildCharts(wide),
-                  const SizedBox(height: 22),
-                ],
-                _buildModules(contentW, wide),
-                const SizedBox(height: 22),
-                _buildRecentStudents(),
-                const SizedBox(height: 24),
+            constraints: const BoxConstraints(maxWidth: 1100),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _hero(),
+              const SizedBox(height: 16),
+              _statsGrid(wide),
+              const SizedBox(height: 16),
+              _resultsCenter(),
+              _quickActions(),
+              if (!_isTeacher) ...[
+                const SmSectionTitle('Analytics', sub: 'Payments and finalized results'),
+                _buildCharts(wide),
               ],
-            ),
+              _buildModules(contentW, wide),
+              _buildRecentStudents(),
+            ]),
           ),
         ),
       );
     });
   }
 
-  Widget _buildPageHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Dashboard', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _kDark)),
-              Text('${_data?['date'] ?? ''}', style: const TextStyle(color: _kMuted, fontSize: 13)),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _kBorder),
-          ),
-          child: const Text('Home > Dashboard', style: TextStyle(color: _kMuted, fontSize: 12)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWelcomeBanner() {
-    final school = '${_user['schoolname'] ?? 'Admin'}';
+  // ── hero ──
+  Widget _hero() {
+    final school = '${_user['schoolname'] ?? 'Your School'}';
+    final who = '${_user['fullname'] ?? _user['name'] ?? ''}'.trim();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [_kPrimary, _kViolet], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.25), blurRadius: 18, offset: const Offset(0, 8))],
+        borderRadius: BorderRadius.circular(30),
+        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF4767C0), Color(0xFF2A3F86), Color(0xFF1B2A5E)]),
+        border: Border.all(color: SM.a(Colors.white, .18)),
+        boxShadow: [BoxShadow(color: SM.a(SM.blue, .45), blurRadius: 34, offset: const Offset(0, 16))],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Welcome back, $school! 👋', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+      child: Stack(children: [
+        Positioned(right: -40, top: -50, child: Container(width: 190, height: 190, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [SM.a(SM.orange, .55), SM.a(SM.orange, 0)])))),
+        Positioned(left: -60, bottom: -80, child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [SM.a(SM.cyan, .30), SM.a(SM.cyan, 0)])))),
+        Padding(
+          padding: const EdgeInsets.all(22),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Wrap(spacing: 8, runSpacing: 6, children: [
+                  SmPill(_roleLabel, color: Colors.white, icon: Icons.verified_user_rounded),
+                  if (_offlineData) const SmPill('Offline data', color: SM.amber, icon: Icons.cloud_off_rounded) else const SmPill('Live', color: SM.green, icon: Icons.circle),
+                ]),
+                const SizedBox(height: 14),
+                Text(who.isEmpty ? 'Welcome back 👋' : 'Hi, ${who.split(' ').first} 👋', style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -.6)),
                 const SizedBox(height: 4),
-                const Text("Here's what's happening with your school today.", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text('${_data?['date'] ?? ''}', style: const TextStyle(color: Color(0xFFD6E0FA), fontSize: 13)),
                 const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(20)),
-                  child: Text(_roleLabel, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                ),
-              ],
+                Text(school, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w700)),
+              ]),
             ),
-          ),
-          Icon(Icons.school, size: 48, color: Colors.white.withOpacity(0.3)),
-        ],
-      ),
+            const SizedBox(width: 12),
+            Container(
+              width: 74,
+              height: 74,
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: SM.a(Colors.black, .3), blurRadius: 16, offset: const Offset(0, 8))]),
+              child: ClipOval(child: Image.asset('assets/images/logo.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.school_rounded, color: SM.blue, size: 34))),
+            ),
+          ]),
+        ),
+      ]),
     );
   }
 
-  Widget _buildStatCards(bool wide) {
-    final cards = <Widget>[
-      _statCard('Total Students', '${_num(_stats['total_students']).toInt()}', 'Registered students', Icons.people, Colors.blue),
-      _statCard('Staff Members', '${_num(_stats['total_staff']).toInt()}', 'Teaching & admin', Icons.co_present, _kGreen),
+  // ── stats bento ──
+  Widget _statsGrid(bool wide) {
+    final tiles = <Widget>[
+      _statTile('Students', SmCount(_num(_stats['total_students']), style: _bigNum), 'Registered', Icons.groups_rounded, SM.brand, SM.blueLight),
+      _statTile('Staff', SmCount(_num(_stats['total_staff']), style: _bigNum), 'Teaching & admin', Icons.badge_rounded, SM.mint, SM.green),
     ];
     if (!_isTeacher) {
-      cards.add(_statCard('Finalized Results', '${_num(_stats['finalized_results']).toInt()}', 'Completed assessments', Icons.file_copy, _kAmber));
-      cards.add(_statCard('Total Revenue', '₦${_money(_num(_stats['total_revenue']))}', 'Student payments', Icons.monetization_on, _kRose));
+      tiles.add(_statTile('Finalized', SmCount(_num(_stats['finalized_results']), style: _bigNum), 'Published results', Icons.task_alt_rounded, SM.violet2, SM.violet));
+      tiles.add(_statTile('Revenue', FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text('₦${_compact(_num(_stats['total_revenue']))}', style: _bigNum)), 'Student payments', Icons.payments_rounded, SM.hot, SM.orange));
     }
     return GridView.count(
-      crossAxisCount: wide ? cards.length : 2,
+      crossAxisCount: wide ? tiles.length : 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      childAspectRatio: wide ? 2.2 : 1.35,
-      children: cards,
+      childAspectRatio: wide ? 1.7 : 1.08,
+      children: tiles,
     );
   }
 
-  Widget _statCard(String title, String value, String sub, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _kMuted))),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, color: color, size: 16),
-              ),
-            ],
-          ),
-          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _kDark))),
-          Row(
-            children: [
-              Container(width: 18, height: 4, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4))),
-              const SizedBox(width: 6),
-              Expanded(child: Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: _kMuted))),
-            ],
-          ),
-        ],
-      ),
+  TextStyle get _bigNum => const TextStyle(color: SM.text, fontSize: 27, fontWeight: FontWeight.w800, letterSpacing: -.8);
+
+  Widget _statTile(String title, Widget value, String sub, IconData icon, Gradient g, Color glow) {
+    return SmGlass(
+      radius: 26,
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(gradient: g, borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: SM.a(glow, .45), blurRadius: 14, offset: const Offset(0, 6))]),
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+        value,
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SM.text, fontSize: 13.5, fontWeight: FontWeight.w700)),
+          Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SM.muted, fontSize: 11.5)),
+        ]),
+      ]),
     );
   }
 
-  Widget _buildQuickActions() {
-    const wanted = ['Manage Users', 'Result Upload', 'Student Fees', 'Add Notice', 'Add Exam', 'Homework'];
+  // ── results centre (upload + overview) ──
+  Widget _resultsCenter() {
+    final up = _findLeaf('Result Upload');
+    final ov = _findLeaf('Result Overview');
+    if (up == null && ov == null) return const SizedBox.shrink();
+    return SmGlass(
+      radius: 28,
+      padding: const EdgeInsets.all(18),
+      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [SM.a(SM.orange, .22), SM.a(const Color(0xFFFF4D8D), .12), SM.a(SM.blue, .18)]),
+      border: SM.a(SM.orange, .45),
+      glow: SM.orange,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 46, height: 46, decoration: BoxDecoration(gradient: SM.hot, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.auto_graph_rounded, color: Colors.white, size: 25)),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Results Center', style: TextStyle(color: SM.text, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -.3)),
+              Text('Upload scores, then publish to students & parents', style: TextStyle(color: SM.muted, fontSize: 12.5)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        Row(children: [
+          if (up != null) Expanded(child: SmButton(label: 'Upload', icon: Icons.upload_file_rounded, height: 50, onTap: () => _open(up))),
+          if (up != null && ov != null) const SizedBox(width: 10),
+          if (ov != null) Expanded(child: SmButton(label: 'Overview', icon: Icons.fact_check_rounded, gradient: SM.hot, glow: SM.orange, height: 50, onTap: () => _open(ov))),
+        ]),
+      ]),
+    );
+  }
+
+  // ── quick actions ──
+  Widget _quickActions() {
+    const wanted = ['Manage Users', 'Student Fees', 'Add Notice', 'Add Exam', 'Homework', 'Class Ranking', 'Result Template', 'Add Subject'];
     final items = <MapEntry<NavGroup, NavLeaf>>[];
     for (final title in wanted) {
       for (final g in _visibleGroups) {
         final hit = g.leavesFor(_role).where((l) => l.title == title);
-        if (hit.isNotEmpty) { items.add(MapEntry(g, hit.first)); break; }
+        if (hit.isNotEmpty) {
+          items.add(MapEntry(g, hit.first));
+          break;
+        }
       }
     }
     if (items.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle('Quick Actions'),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 92,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (_, i) {
-              final g = items[i].key;
-              final l = items[i].value;
-              return InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => _open(l),
-                child: Container(
-                  width: 92,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: g.color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                        child: Icon(l.icon, color: g.color, size: 20),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(l.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _kDark)),
-                    ],
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SmSectionTitle('Quick actions'),
+      SizedBox(
+        height: 108,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (_, i) {
+            final g = items[i].key;
+            final l = items[i].value;
+            return SmPress(
+              onTap: () => _open(l),
+              child: SizedBox(
+                width: 82,
+                child: Column(children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [SM.a(g.color, .95), SM.a(g.color, .55)]),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [BoxShadow(color: SM.a(g.color, .38), blurRadius: 16, offset: const Offset(0, 8))],
+                    ),
+                    child: Icon(l.icon, color: Colors.white, size: 28),
                   ),
-                ),
-              );
-            },
-          ),
+                  const SizedBox(height: 8),
+                  Text(l.title, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SM.text, fontSize: 11.5, fontWeight: FontWeight.w700, height: 1.2)),
+                ]),
+              ),
+            );
+          },
         ),
-        const SizedBox(height: 22),
-      ],
+      ),
+    ]);
+  }
+
+  // ── charts shell ──
+  Widget _chartCard({required String title, required String subtitle, required Widget toggle, required Widget child}) {
+    return SmGlass(
+      radius: 26,
+      padding: const EdgeInsets.all(18),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(color: SM.text, fontSize: 16, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(color: SM.muted, fontSize: 12)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          toggle,
+        ]),
+        const SizedBox(height: 16),
+        child,
+      ]),
     );
   }
 
-  Widget _sectionTitle(String text, {Widget? trailing}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _kDark)),
-        if (trailing != null) trailing,
-      ],
+  // ── all modules ──
+  Widget _buildModules(double width, bool wide) {
+    final q = _query.trim().toLowerCase();
+    final cardW = wide ? (width - 12) / 2 - 0.5 : width;
+    final cards = <Widget>[];
+    var linkCount = 0;
+    for (final g in _visibleGroups) {
+      var leaves = g.leavesFor(_role);
+      if (q.isNotEmpty) {
+        leaves = leaves.where((l) => l.title.toLowerCase().contains(q) || g.title.toLowerCase().contains(q)).toList();
+      }
+      if (leaves.isEmpty) continue;
+      linkCount += leaves.length;
+      cards.add(SizedBox(width: cardW, child: _moduleCard(g, leaves)));
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SmSectionTitle('All modules', trailing: Text('$linkCount links', style: const TextStyle(fontSize: 12, color: SM.muted))),
+      TextField(
+        controller: _search,
+        style: const TextStyle(color: SM.text, fontWeight: FontWeight.w600),
+        cursorColor: SM.orange,
+        decoration: smInput('Search modules…', icon: Icons.search_rounded, dense: true, accent: SM.orange,
+            suffix: _query.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded, color: SM.muted, size: 19), onPressed: () { _search.clear(); setState(() => _query = ''); })),
+        onChanged: (v) => setState(() => _query = v),
+      ),
+      const SizedBox(height: 14),
+      if (cards.isEmpty)
+        const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('No module matches your search', style: TextStyle(color: SM.muted))))
+      else
+        Wrap(spacing: 12, runSpacing: 12, children: cards),
+    ]);
+  }
+
+  Widget _moduleCard(NavGroup g, List<NavLeaf> leaves) {
+    return SmGlass(
+      radius: 24,
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(gradient: LinearGradient(colors: [SM.a(g.color, .95), SM.a(g.color, .55)]), borderRadius: BorderRadius.circular(13)),
+            child: Icon(g.icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(g.title, style: const TextStyle(color: SM.text, fontSize: 15, fontWeight: FontWeight.w800))),
+          SmPill('${leaves.length}', color: g.color),
+        ]),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: leaves.map((l) => _linkChip(g, l)).toList()),
+      ]),
+    );
+  }
+
+  Widget _linkChip(NavGroup g, NavLeaf l) {
+    return SmPress(
+      onTap: () => _open(l),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: SM.a(Colors.white, .06), borderRadius: BorderRadius.circular(14), border: Border.all(color: SM.glassLine)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(l.icon, size: 16, color: g.color),
+          const SizedBox(width: 7),
+          Flexible(child: Text(l.title, style: const TextStyle(color: SM.text, fontSize: 12.5, fontWeight: FontWeight.w600))),
+          if (l.isNew) ...[const SizedBox(width: 6), const SmPill('NEW', color: SM.orange, filled: true, fontSize: 9)],
+        ]),
+      ),
+    );
+  }
+
+  // ── recent students ──
+  Widget _buildRecentStudents() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SmSectionTitle('Recent students',
+          trailing: TextButton(onPressed: () { final leaf = _findLeaf('Manage Users'); if (leaf != null) _open(leaf); }, child: const Text('View all', style: TextStyle(color: SM.orange, fontWeight: FontWeight.w700)))),
+      SmGlass(
+        radius: 26,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: _students.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(28),
+                child: Center(child: Column(children: [Icon(Icons.person_off_outlined, size: 44, color: SM.faint), SizedBox(height: 10), Text('No students added yet', style: TextStyle(color: SM.muted))])),
+              )
+            : Column(
+                children: _students.map<Widget>((s) {
+                  final m = Map<String, dynamic>.from(s);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    child: Row(children: [
+                      SmAvatar(url: '${m['image_url'] ?? m['image'] ?? ''}', name: '${m['fullname'] ?? ''}', size: 44),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${m['fullname'] ?? ''}', style: const TextStyle(color: SM.text, fontWeight: FontWeight.w700, fontSize: 14.5)),
+                          Text('${m['department'] ?? '-'} • ${m['class_name'] ?? '-'}', style: const TextStyle(color: SM.muted, fontSize: 12)),
+                        ]),
+                      ),
+                      const SmPill('Active', color: SM.green),
+                    ]),
+                  );
+                }).toList(),
+              ),
+      ),
+    ]);
+  }
+
+  // ── floating dock ──
+  Widget _dock() {
+    final items = <Widget>[];
+    Widget btn(IconData icon, String label, VoidCallback onTap, {bool active = false}) => Expanded(
+          child: SmPress(
+            onTap: onTap,
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(gradient: active ? SM.hot : null, borderRadius: BorderRadius.circular(16)),
+                child: Icon(icon, size: 22, color: active ? Colors.white : SM.muted),
+              ),
+              const SizedBox(height: 2),
+              Text(label, style: TextStyle(color: active ? SM.text : SM.muted, fontSize: 10.5, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        );
+    items.add(btn(Icons.home_rounded, 'Home', () {
+      if (_scroll.hasClients) _scroll.animateTo(0, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
+    }, active: true));
+    final up = _findLeaf('Result Upload');
+    final ov = _findLeaf('Result Overview');
+    final us = _findLeaf('Manage Users');
+    final ex = _findLeaf('Add Exam');
+    if (up != null) items.add(btn(Icons.upload_file_rounded, 'Upload', () => _open(up)));
+    if (ov != null) items.add(btn(Icons.fact_check_rounded, 'Overview', () => _open(ov)));
+    if (us != null) {
+      items.add(btn(Icons.groups_rounded, 'Users', () => _open(us)));
+    } else if (ex != null && ov == null) {
+      items.add(btn(Icons.quiz_rounded, 'Exams', () => _open(ex)));
+    }
+    items.add(btn(Icons.apps_rounded, 'Menu', _openDrawer));
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+            child: Container(
+              height: 68,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(color: SM.a(SM.sheet, .82), borderRadius: BorderRadius.circular(30), border: Border.all(color: SM.glassLine), boxShadow: [BoxShadow(color: SM.a(Colors.black, .4), blurRadius: 24, offset: const Offset(0, 10))]),
+              child: Row(children: items),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  DRAWER (hamburger) — Result Overview is pinned at the top
+  // ════════════════════════════════════════════════════════════════════════
+  Widget _buildDrawer() {
+    final groups = _visibleGroups;
+    final up = _findLeaf('Result Upload');
+    final ov = _findLeaf('Result Overview');
+    final school = '${_user['schoolname'] ?? 'SchoolsMirror'}';
+    return Drawer(
+      backgroundColor: SM.bg1,
+      width: math.min(MediaQuery.of(context).size.width * .88, 350),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(30))),
+      child: SmBackground(
+        child: SafeArea(
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+              child: Row(children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(shape: BoxShape.circle, gradient: const SweepGradient(colors: [Color(0xFFF7941D), Color(0xFFFF4D8D), Color(0xFF6C8CE0), Color(0xFF22D3EE), Color(0xFFF7941D)])),
+                  child: Container(padding: const EdgeInsets.all(7), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: ClipOval(child: Image.asset('assets/images/logo.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.school_rounded, color: SM.blue)))),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(school, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SM.text, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -.3)),
+                    const SizedBox(height: 4),
+                    SmPill(_roleLabel, color: SM.blueLight),
+                  ]),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: ListView(padding: const EdgeInsets.fromLTRB(14, 6, 14, 10), children: [
+                _pin(Icons.dashboard_rounded, 'Dashboard', 'Overview of your school', SM.brand, () => Navigator.of(context).pop()),
+                if (ov != null) _pin(Icons.fact_check_rounded, 'Result Overview', 'Finalize & publish results', SM.hot, () => _open(ov), badge: 'PUBLISH'),
+                if (up != null) _pin(Icons.upload_file_rounded, 'Result Upload', 'Enter scores, works offline', SM.cyan2, () => _open(up)),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(6, 18, 6, 8),
+                  child: Text('NAVIGATION', style: TextStyle(color: SM.faint, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
+                ),
+                for (final g in groups) _drawerGroup(g),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+              child: SmButton(label: 'Logout', icon: Icons.logout_rounded, gradient: SM.rose2, glow: SM.rose, height: 50, onTap: () {
+                Navigator.of(context).pop();
+                _logout();
+              }),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _pin(IconData icon, String title, String sub, Gradient g, VoidCallback onTap, {String? badge}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SmPress(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: SM.a(Colors.white, .07), borderRadius: BorderRadius.circular(20), border: Border.all(color: SM.glassLine)),
+          child: Row(children: [
+            Container(width: 44, height: 44, decoration: BoxDecoration(gradient: g, borderRadius: BorderRadius.circular(15)), child: Icon(icon, color: Colors.white, size: 23)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Flexible(child: Text(title, style: const TextStyle(color: SM.text, fontSize: 15, fontWeight: FontWeight.w800))),
+                  if (badge != null) ...[const SizedBox(width: 8), SmPill(badge, color: SM.orange, filled: true, fontSize: 9)],
+                ]),
+                Text(sub, style: const TextStyle(color: SM.muted, fontSize: 12)),
+              ]),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: SM.faint),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerGroup(NavGroup g) {
+    final leaves = g.leavesFor(_role);
+    Widget bubble() => Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(gradient: LinearGradient(colors: [SM.a(g.color, .95), SM.a(g.color, .55)]), borderRadius: BorderRadius.circular(12)),
+          child: Icon(g.icon, color: Colors.white, size: 19),
+        );
+    if (g.flat && leaves.length == 1) {
+      final l = leaves.first;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: SmPress(
+          onTap: () => _open(l),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: SM.glass, borderRadius: BorderRadius.circular(18), border: Border.all(color: SM.glassLine)),
+            child: Row(children: [
+              bubble(),
+              const SizedBox(width: 12),
+              Expanded(child: Text(l.title, style: const TextStyle(color: SM.text, fontSize: 14.5, fontWeight: FontWeight.w700))),
+              if (l.isNew) const SmPill('NEW', color: SM.orange, filled: true, fontSize: 9),
+            ]),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        decoration: BoxDecoration(color: SM.glass, borderRadius: BorderRadius.circular(18), border: Border.all(color: SM.glassLine)),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            iconColor: SM.orange,
+            collapsedIconColor: SM.muted,
+            shape: const RoundedRectangleBorder(),
+            collapsedShape: const RoundedRectangleBorder(),
+            leading: bubble(),
+            title: Text(g.title, style: const TextStyle(color: SM.text, fontSize: 14.5, fontWeight: FontWeight.w700)),
+            children: [
+              for (final l in leaves)
+                SmPress(
+                  onTap: () => _open(l),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    child: Row(children: [
+                      Icon(l.icon, size: 18, color: g.color),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(l.title, style: const TextStyle(color: SM.text, fontSize: 13.5, fontWeight: FontWeight.w600))),
+                      if (l.isNew) const SmPill('NEW', color: SM.orange, filled: true, fontSize: 9),
+                    ]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1285,225 +1622,6 @@ class _AdminHomeState extends State<AdminHome> {
     );
   }
 
-  Widget _chartCard({required String title, required String subtitle, required Widget toggle, required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: _kBorder)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _kDark)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: _kMuted)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              toggle,
-            ],
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════════
-  //  ALL MODULES
-  // ════════════════════════════════════════════════════════════════════════
-  Widget _buildModules(double width, bool wide) {
-    final q = (_query ?? '').trim().toLowerCase();
-    final cardW = wide ? (width - 12) / 2 - 0.5 : width;
-    final cards = <Widget>[];
-    var linkCount = 0;
-
-    for (final g in _visibleGroups) {
-      var leaves = g.leavesFor(_role);
-      if (q.isNotEmpty) {
-        leaves = leaves.where((l) => 
-          '${l.title}'.toLowerCase().contains(q) || 
-          '${g.title}'.toLowerCase().contains(q)
-        ).toList();
-      }
-      if (leaves.isEmpty) continue;
-      linkCount += leaves.length;
-      cards.add(SizedBox(width: cardW, child: _moduleCard(g, leaves)));
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle('All Modules', trailing: Text('$linkCount links', style: const TextStyle(fontSize: 12, color: _kMuted))),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _search,
-          onChanged: (v) => setState(() => _query = v),
-          decoration: InputDecoration(
-            hintText: 'Search pages…',
-            hintStyle: const TextStyle(fontSize: 13, color: _kMuted),
-            prefixIcon: const Icon(Icons.search, size: 20, color: _kMuted),
-            suffixIcon: _query.isEmpty ? null : IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: () { _search.clear(); setState(() => _query = ''); },
-            ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 0),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _kBorder)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _kPrimary)),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (cards.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
-            child: const Center(child: Text('No pages match your search', style: TextStyle(color: _kMuted))),
-          )
-        else
-          Wrap(spacing: 12, runSpacing: 12, children: cards),
-      ],
-    );
-  }
-
-  Widget _moduleCard(NavGroup g, List<NavLeaf> leaves) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: g.color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                child: Icon(g.icon, color: g.color, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: Text(g.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _kDark))),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: g.color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                child: Text('${leaves.length}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: g.color)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: leaves.map((l) => _linkChip(g, l)).toList()),
-        ],
-      ),
-    );
-  }
-
-  Widget _linkChip(NavGroup g, NavLeaf l) {
-    return Material(
-      color: g.color.withOpacity(0.07),
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => _open(l),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(l.icon, size: 15, color: g.color),
-              const SizedBox(width: 6),
-              Flexible(child: Text(l.title, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: _kDark))),
-              if (l.isNew) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(color: _kGreen, borderRadius: BorderRadius.circular(4)),
-                  child: const Text('NEW', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════════
-  //  RECENT STUDENTS
-  // ════════════════════════════════════════════════════════════════════════
-  Widget _buildRecentStudents() {
-    return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.school, color: _kPrimary, size: 20),
-                    SizedBox(width: 8),
-                    Text('Recent Students', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _kDark)),
-                  ],
-                ),
-                TextButton(
-                  onPressed: () { final leaf = _findLeaf('Manage Users'); if (leaf != null) _open(leaf); },
-                  child: const Text('View All'),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          if (_students.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                children: [
-                  Icon(Icons.person_off_outlined, size: 48, color: Colors.grey.shade300),
-                  const SizedBox(height: 12),
-                  const Text('No students added yet', style: TextStyle(color: _kMuted)),
-                ],
-              ),
-            )
-          else
-            Column(
-              children: _students.map<Widget>((s) {
-                final m = Map<String, dynamic>.from(s);
-                final img = '${m['image_url'] ?? ''}';
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _kPrimary.withOpacity(0.1),
-                    backgroundImage: img.isNotEmpty ? NetworkImage(img) : null,
-                    onBackgroundImageError: img.isNotEmpty ? (exception, stackTrace) {} : null,
-                    child: img.isEmpty 
-                        ? const Icon(Icons.person, color: _kPrimary) 
-                        : null,
-                  ),
-                  title: Text('${m['fullname'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, color: _kDark)),
-                  subtitle: Text('${m['department'] ?? '-'} • ${m['class_name'] ?? '-'}', style: const TextStyle(fontSize: 12, color: _kMuted)),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Active', style: TextStyle(fontSize: 10, color: Colors.green)),
-                  ),
-                );
-              }).toList(),
-            ),
-        ],
-      ),
-    );
-  }
-
   // ════════════════════════════════════════════════════════════════════════
   //  MESSAGES BOTTOM SHEET
   // ════════════════════════════════════════════════════════════════════════
@@ -1520,12 +1638,7 @@ class _AdminHomeState extends State<AdminHome> {
         final messages = List<Map<String, dynamic>>.from(json['data']['messages'] ?? []);
         
         if (mounted) {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => _MessagesSheet(messages: messages, onRefresh: _load),
-          );
+          smSheet(context, (_) => _MessagesSheet(messages: messages, onRefresh: _load));
         }
       }
     } catch (e) {
@@ -1533,150 +1646,10 @@ class _AdminHomeState extends State<AdminHome> {
     }
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  //  DRAWER
-  // ════════════════════════════════════════════════════════════════════════
-  Widget _buildDrawer() {
-    final groups = _visibleGroups;
-    return Drawer(
-      backgroundColor: Colors.white, 
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(top: 50, bottom: 20, left: 20),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [_kPrimary, Color(0xFF3a0ca3)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.white24,
-                    child: Icon(Icons.school, color: Colors.white, size: 30)),
-                const SizedBox(height: 12),
-                Text('${_user['schoolname'] ?? 'Admin Panel'}',
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                Text(_roleLabel,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.dashboard, color: _kPrimary),
-                    title: const Text('Dashboard', style: TextStyle(fontSize: 14, color: _kDark, fontWeight: FontWeight.w500)),
-                    selected: true,
-                    selectedTileColor: _kPrimary.withOpacity(0.08),
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 16, top: 16, bottom: 8),
-                    child: Text('NAVIGATION',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: _kMuted,
-                            letterSpacing: 1.2)),
-                  ),
-                  for (final g in groups) _drawerGroup(g),
-                ],
-              ),
-            ),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Logout', style: TextStyle(color: Colors.red)),
-            onTap: () async {
-              await ApiClient.logout();
-              if (mounted) Navigator.of(context).pushReplacementNamed('/');
-            },
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _drawerGroup(NavGroup g) {
-    final leaves = g.leavesFor(_role);
-    if (g.flat && leaves.length == 1) {
-      final l = leaves.first;
-      return ListTile(
-        leading: Icon(g.icon, size: 20, color: g.color),
-        title: Row(
-          children: [
-            Text(l.title, style: const TextStyle(fontSize: 14, color: _kDark)),
-            if (l.isNew) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                    color: _kGreen, borderRadius: BorderRadius.circular(4)),
-                child: const Text('NEW',
-                    style: TextStyle(
-                        color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ],
-        ),
-        onTap: () => _open(l),
-      );
-    }
-    return ExpansionTile(
-      leading: Icon(g.icon, size: 20, color: g.color),
-      title: Text(g.title, style: const TextStyle(fontSize: 14, color: _kDark)),
-      iconColor: g.color,
-      collapsedIconColor: _kMuted,
-      childrenPadding: EdgeInsets.zero,
-      children: [
-        for (final l in leaves)
-          ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.only(left: 46, right: 16),
-            leading: Icon(l.icon, size: 16, color: _kMuted),
-            title: Row(
-              children: [
-                Flexible(
-                  child: Text(l.title,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, color: _kMuted)),
-                ),
-                if (l.isNew) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                        color: _kGreen, borderRadius: BorderRadius.circular(4)),
-                    child: const Text('NEW',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ],
-            ),
-            onTap: () => _open(l),
-          ),
-      ],
-    );
-  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  MESSAGES SHEET WIDGET
+//  MESSAGES SHEET (dark glass)
 // ════════════════════════════════════════════════════════════════════════════
 class _MessagesSheet extends StatefulWidget {
   final List<Map<String, dynamic>> messages;
@@ -1696,96 +1669,71 @@ class _MessagesSheetState extends State<_MessagesSheet> {
     _items = List.of(widget.messages);
   }
 
+  Future<void> _markAll() async {
+    try {
+      await ApiClient.loadToken();
+      final token = ApiClient.token;
+      await http.post(Uri.parse('https://schoolsmirror.com/fetch_data.php'), body: {'token': token, 'action': 'mark_read'});
+      setState(() => _items = _items.map((m) => {...m, 'unread': false}).toList());
+      widget.onRefresh();
+    } catch (_) {}
+  }
+
+  Future<void> _delete(Map<String, dynamic> m) async {
+    try {
+      await ApiClient.loadToken();
+      final token = ApiClient.token;
+      await http.post(Uri.parse('https://schoolsmirror.com/fetch_data.php'), body: {'token': token, 'action': 'delete_message', 'id': '${m['id']}'});
+      setState(() => _items.removeWhere((x) => x['id'] == m['id']));
+      widget.onRefresh();
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      maxChildSize: 0.95,
-      minChildSize: 0.4,
+      initialChildSize: .75,
+      maxChildSize: .95,
+      minChildSize: .4,
       expand: false,
-      builder: (_, controller) => Container(
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Messages & Notifications', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  TextButton(
-                    onPressed: () async {
-                      try {
-                        await ApiClient.loadToken();
-                        final token = ApiClient.token;
-                        await http.post(Uri.parse('https://schoolsmirror.com/fetch_data.php'), body: {'token': token, 'action': 'mark_read'});
-                        setState(() => _items = _items.map((m) => {...m, 'unread': false}).toList());
-                        widget.onRefresh();
-                      } catch (_) {}
+      builder: (_, controller) => SmSheetFrame(
+        title: 'Messages & Notifications',
+        subtitle: '${_items.length} message${_items.length == 1 ? '' : 's'}',
+        icon: Icons.notifications_rounded,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: _markAll, icon: const Icon(Icons.done_all_rounded, size: 18, color: SM.orange), label: const Text('Mark all read', style: TextStyle(color: SM.orange, fontWeight: FontWeight.w700)))),
+          ),
+          Expanded(
+            child: _items.isEmpty
+                ? const Center(child: Text('No messages', style: TextStyle(color: SM.muted)))
+                : ListView.builder(
+                    controller: controller,
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
+                    itemCount: _items.length,
+                    itemBuilder: (_, i) {
+                      final m = _items[i];
+                      final unread = m['unread'] == true;
+                      final c = unread ? SM.cyan : SM.blueLight;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(color: SM.a(c, unread ? .12 : .05), borderRadius: BorderRadius.circular(18), border: Border(left: BorderSide(color: c, width: 3.5), top: BorderSide(color: SM.glassLine), right: BorderSide(color: SM.glassLine), bottom: BorderSide(color: SM.glassLine))),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Expanded(child: Text('${m['sender'] ?? ''}', style: const TextStyle(color: SM.text, fontWeight: FontWeight.w800, fontSize: 13.5))),
+                            Text('${m['time_ago'] ?? ''}', style: const TextStyle(fontSize: 11.5, color: SM.muted)),
+                          ]),
+                          const SizedBox(height: 6),
+                          Text('${m['message'] ?? ''}', style: const TextStyle(fontSize: 13.5, color: SM.muted, height: 1.4)),
+                          Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _delete(m), icon: const Icon(Icons.delete_outline_rounded, size: 16, color: SM.rose), label: const Text('Delete', style: TextStyle(fontSize: 12, color: SM.rose)))),
+                        ]),
+                      );
                     },
-                    child: const Text('Mark all read'),
                   ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: _items.isEmpty
-                  ? const Center(child: Text('No messages', style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      controller: controller,
-                      itemCount: _items.length,
-                      itemBuilder: (_, i) {
-                        final m = _items[i];
-                        final unread = m['unread'] == true;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: unread ? const Color(0xFFeff6ff) : Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border(left: BorderSide(color: unread ? _kCyan : _kPrimary, width: 3)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(m['sender'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                  Text(m['time_ago'] ?? '', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(m['message'] ?? '', style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
-                              const SizedBox(height: 6),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: () async {
-                                    try {
-                                      await ApiClient.loadToken();
-                                      final token = ApiClient.token;
-                                      await http.post(Uri.parse('https://schoolsmirror.com/fetch_data.php'), body: {'token': token, 'action': 'delete_message', 'message_id': m['id'].toString()});
-                                      setState(() => _items.removeWhere((x) => x['id'] == m['id']));
-                                      widget.onRefresh();
-                                    } catch (_) {}
-                                  },
-                                  icon: const Icon(Icons.delete_outline, size: 14, color: Colors.red),
-                                  label: const Text('Delete', style: TextStyle(fontSize: 11, color: Colors.red)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }
@@ -1804,7 +1752,7 @@ class _Toggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(color: const Color(0xFFf1f5f9), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: SM.a(Colors.white, .07), borderRadius: BorderRadius.circular(13), border: Border.all(color: SM.glassLine)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: List.generate(options.length, (i) {
@@ -1814,12 +1762,8 @@ class _Toggle extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: sel ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: sel ? [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4)] : null,
-              ),
-              child: Text(options[i], style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: sel ? _kPrimary : _kMuted)),
+              decoration: BoxDecoration(gradient: sel ? SM.brand : null, borderRadius: BorderRadius.circular(10)),
+              child: Text(options[i], style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: sel ? Colors.white : SM.muted)),
             ),
           );
         }),
@@ -1827,6 +1771,7 @@ class _Toggle extends StatelessWidget {
     );
   }
 }
+
 
 void _paintText(Canvas canvas, String text, Offset pos, TextStyle style, {double ax = 0.5, double ay = 0.5, double maxWidth = 100}) {
   final tp = TextPainter(text: TextSpan(text: text, style: style), textDirection: TextDirection.ltr, maxLines: 1, ellipsis: '…')..layout(maxWidth: maxWidth);
@@ -1925,7 +1870,7 @@ class _DonutPainter extends CustomPainter {
     final side = math.min(size.width, size.height);
     final rect = Rect.fromCenter(center: Offset(size.width / 2, size.height / 2), width: side - stroke, height: side - stroke);
 
-    canvas.drawArc(rect, 0, math.pi * 2, false, Paint()..color = const Color(0xFFf1f5f9)..style = PaintingStyle.stroke..strokeWidth = stroke);
+    canvas.drawArc(rect, 0, math.pi * 2, false, Paint()..color = const Color(0x1AFFFFFF)..style = PaintingStyle.stroke..strokeWidth = stroke);
 
     final total = values.fold<double>(0, (a, b) => a + b);
     if (total <= 0) return;

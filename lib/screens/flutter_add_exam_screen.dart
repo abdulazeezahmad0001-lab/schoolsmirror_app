@@ -6,6 +6,7 @@
 // pubspec.yaml needs:  http, shared_preferences, image_picker, url_launcher
 
 import 'dart:convert';
+import 'dart:ui' show ImageFilter;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -24,28 +25,78 @@ const List<String> _apiUrls = [
 int _apiIdx = 0;
 String get _apiUrl => _apiUrls[_apiIdx];
 
-/// Same colour tokens as the :root block of add_exam.php
+/// Aurora Bento design tokens (see below)
+/// "Aurora Bento" design tokens
 class _C {
-  static const primary = Color(0xFF0083B0);
-  static const secondary = Color(0xFF00B4DB);
-  static const success = Color(0xFF28A745);
-  static const draft = Color(0xFF6C757D);
-  static const danger = Color(0xFFDC3545);
-  static const warning = Color(0xFFFFC107);
-  static const info = Color(0xFF17A2B8);
-  static const theory = Color(0xFF8B4513);
-  static const sci = Color(0xFF6F42C1);
-  static const lightBg = Color(0xFFF8F9FA);
-  static const border = Color(0xFFDEE2E6);
-  static const text = Color(0xFF333333);
-  static const purple1 = Color(0xFF667EEA);
-  static const purple2 = Color(0xFF764BA2);
-  static const payment = Color(0xFF9C27B0);
+  static const primary = Color(0xFF5B4BFF); // electric indigo
+  static const secondary = Color(0xFF22D3EE); // cyan
+  static const pink = Color(0xFFEC4899);
+  static const success = Color(0xFF10B981);
+  static const draft = Color(0xFF64748B);
+  static const danger = Color(0xFFF43F5E);
+  static const warning = Color(0xFFF59E0B);
+  static const info = Color(0xFF0EA5E9);
+  static const theory = Color(0xFFF97316);
+  static const sci = Color(0xFF8B5CF6);
+  static const payment = Color(0xFF7C3AED);
+  static const lightBg = Color(0xFFF4F5FF);
+  static const field = Color(0xFFF6F7FF);
+  static const border = Color(0xFFE3E6F8);
+  static const text = Color(0xFF0F172A); // ink
+  static const muted = Color(0xFF55627A);
+  static const hint = Color(0xFF8590A6);
+  static const purple1 = Color(0xFF5B4BFF);
+  static const purple2 = Color(0xFF9B5CF6);
 
-  static const headerGradient = LinearGradient(colors: [primary, secondary]);
-  static const bannerGradient = LinearGradient(
-      begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [purple1, purple2]);
+  static const headerGradient = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF5B4BFF), Color(0xFF8B5CF6)]);
+  static const ctaGradient = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF5B4BFF), Color(0xFFA855F7)]);
+  static const bannerGradient = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF5B4BFF), Color(0xFF8B5CF6), Color(0xFFEC4899)]);
+  static const heroGradient = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1E1B4B), Color(0xFF3730A3), Color(0xFF7C3AED)]);
+  static const goGradient = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF10B981), Color(0xFF06B6D4)]);
 }
+
+ThemeData _lightTheme() {
+  final base = ThemeData.light(useMaterial3: true);
+  return base.copyWith(
+    scaffoldBackgroundColor: _C.lightBg,
+    canvasColor: Colors.white,
+    cardColor: Colors.white,
+    colorScheme: base.colorScheme.copyWith(primary: _C.primary, secondary: _C.secondary, surface: Colors.white, onSurface: _C.text),
+    textTheme: base.textTheme.apply(bodyColor: _C.text, displayColor: _C.text),
+    textSelectionTheme: const TextSelectionThemeData(cursorColor: _C.primary),
+    dividerColor: _C.border,
+  );
+}
+
+List<BoxShadow> _soft([Color color = const Color(0xFF312E81), double a = 0.09]) =>
+    [BoxShadow(color: color.withOpacity(a), blurRadius: 28, offset: const Offset(0, 12))];
+
+Widget _glass({required Widget child, double radius = 20, EdgeInsets padding = const EdgeInsets.all(12), double opacity = 0.14}) => ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(color: Colors.white.withOpacity(opacity), borderRadius: BorderRadius.circular(radius), border: Border.all(color: Colors.white.withOpacity(0.28))),
+          child: child,
+        ),
+      ),
+    );
+
+/// soft glowing orbs behind the page
+class _AuroraBackdrop extends StatelessWidget {
+  const _AuroraBackdrop();
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        child: Stack(children: [
+          Positioned(top: 380, left: -130, child: _orb(320, const Color(0xFF22D3EE), 0.16)),
+          Positioned(top: 760, right: -140, child: _orb(340, const Color(0xFFA855F7), 0.14)),
+          Positioned(top: 1250, left: -120, child: _orb(300, const Color(0xFFEC4899), 0.10)),
+        ]),
+      );
+  Widget _orb(double s, Color c, double a) => Container(width: s, height: s, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [c.withOpacity(a), c.withOpacity(0)])));
+}
+
 
 // ───────────────────────────── API helper ─────────────────────────────
 class _Api {
@@ -242,10 +293,25 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
 
   void _toast(String msg, {bool error = false}) {
     if (!mounted) return;
+    final c = error ? _C.danger : _C.success;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-          content: Text(msg), backgroundColor: error ? _C.danger : _C.success, behavior: SnackBarBehavior.floating));
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        duration: const Duration(seconds: 4),
+        margin: EdgeInsets.fromLTRB(16, 0, 16, _formVisible ? 150 : 24),
+        content: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
+          decoration: BoxDecoration(color: _C.text, borderRadius: BorderRadius.circular(22), boxShadow: [BoxShadow(color: c.withOpacity(0.35), blurRadius: 24, offset: const Offset(0, 10))]),
+          child: Row(children: [
+            Container(width: 36, height: 36, decoration: BoxDecoration(color: c, shape: BoxShape.circle), child: Icon(error ? Icons.priority_high_rounded : Icons.check_rounded, color: Colors.white, size: 21)),
+            const SizedBox(width: 12),
+            Expanded(child: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, height: 1.3))),
+          ]),
+        ),
+      ));
   }
 
   void _setBanner(String msg, {bool error = false}) {
@@ -620,52 +686,110 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
   }
 
   // ───────────────────────────── dialogs (SweetAlert equivalents) ─────────────────────────────
-  Future<bool?> _confirm(String title, String text,
-      {String yes = 'Yes', bool destructive = false, IconData icon = Icons.warning_amber_rounded}) {
-    return showDialog<bool>(
+  // ───────────────────────────── pop-ups (animated) ─────────────────────────────
+  Widget _popBtn(String label, VoidCallback onTap, {Color color = _C.primary, bool ghost = false, IconData? icon}) {
+    if (ghost) {
+      return SizedBox(
+        width: double.infinity,
+        child: TextButton(
+          onPressed: onTap,
+          style: TextButton.styleFrom(foregroundColor: _C.muted, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+          child: Text(label, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+        ),
+      );
+    }
+    return _btn(label, icon ?? Icons.check_rounded, color, onTap, expand: true);
+  }
+
+  Future<T?> _popup<T>({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String text,
+    required List<Widget> Function(BuildContext) actions,
+    Widget? extra,
+  }) {
+    return showGeneralDialog<T>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Column(children: [
-          Icon(icon, size: 54, color: destructive ? _C.danger : _C.warning),
-          const SizedBox(height: 8),
-          Text(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ]),
-        content: Text(text, textAlign: TextAlign.center),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3085D6), foregroundColor: Colors.white),
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDD3333), foregroundColor: Colors.white),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(yes)),
-        ],
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'close',
+      barrierColor: const Color(0xFF0F172A).withOpacity(0.58),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (ctx, _, __) => const SizedBox.shrink(),
+      transitionBuilder: (ctx, anim, _, __) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
+        return FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.86, end: 1).animate(curved),
+            child: Center(
+              child: Theme(
+                data: _lightTheme(),
+                child: Material(
+                  color: Colors.transparent,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 18),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), boxShadow: [BoxShadow(color: color.withOpacity(0.25), blurRadius: 50, offset: const Offset(0, 20))]),
+                      child: SingleChildScrollView(
+                        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          Center(
+                            child: Container(
+                              width: 96,
+                              height: 96,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: color.withOpacity(0.12)),
+                              child: Container(
+                                width: 70,
+                                height: 70,
+                                decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color, Color.lerp(color, Colors.black, 0.25)!]), boxShadow: [BoxShadow(color: color.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 8))]),
+                                child: Icon(icon, color: Colors.white, size: 34),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: _C.text, height: 1.2)),
+                          const SizedBox(height: 10),
+                          Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15.5, color: _C.muted, height: 1.5)),
+                          if (extra != null) ...[const SizedBox(height: 14), extra],
+                          const SizedBox(height: 20),
+                          ...actions(ctx).expand((w) => [w, const SizedBox(height: 6)]),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Future<void> _alert(String title, String text, {IconData icon = Icons.info, Color color = _C.primary}) {
-    return showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Column(children: [
-          Icon(icon, size: 54, color: color),
-          const SizedBox(height: 8),
-          Text(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ]),
-        content: Text(text, textAlign: TextAlign.center),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _C.primary, foregroundColor: Colors.white),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK')),
-        ],
-      ),
+  Future<bool?> _confirm(String title, String text, {String yes = 'Yes', bool destructive = false, IconData icon = Icons.warning_amber_rounded}) {
+    final color = destructive ? _C.danger : _C.primary;
+    return _popup<bool>(
+      icon: icon,
+      color: color,
+      title: title,
+      text: text,
+      actions: (ctx) => [
+        _popBtn(yes, () => Navigator.pop(ctx, true), color: color, icon: destructive ? Icons.delete_outline_rounded : Icons.check_rounded),
+        _popBtn('Cancel', () => Navigator.pop(ctx, false), ghost: true),
+      ],
+    );
+  }
+
+  Future<void> _alert(String title, String text, {IconData icon = Icons.info_rounded, Color color = _C.primary}) {
+    return _popup<void>(
+      icon: icon,
+      color: color,
+      title: title,
+      text: text,
+      actions: (ctx) => [_popBtn('Got it', () => Navigator.pop(ctx), color: color)],
     );
   }
 
@@ -673,113 +797,109 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
   InputDecoration _dec(String hint, {IconData? icon, String? label}) => InputDecoration(
         hintText: hint,
         labelText: label,
-        prefixIcon: icon == null ? null : Icon(icon, size: 20, color: Colors.grey.shade600),
+        hintStyle: const TextStyle(color: _C.hint, fontSize: 15.5),
+        labelStyle: const TextStyle(color: _C.muted, fontWeight: FontWeight.w600),
+        prefixIcon: icon == null ? null : Icon(icon, size: 21, color: _C.primary),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: _C.field,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFFCCCCCC))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFFCCCCCC))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: _C.primary, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: _C.border, width: 1.4)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: _C.primary, width: 2)),
       );
 
+  /// white rounded card; [bar] tints the outline + glow
   Widget _accentCard({
     required Widget child,
     Color bar = _C.primary,
     Color bg = Colors.white,
-    EdgeInsets padding = const EdgeInsets.all(16),
+    EdgeInsets padding = const EdgeInsets.all(18),
     double barWidth = 4,
-    double radius = 10,
+    double radius = 26,
   }) {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(26), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: Stack(children: [
-          Padding(padding: EdgeInsets.only(left: barWidth).add(padding), child: child),
-          Positioned(left: 0, top: 0, bottom: 0, width: barWidth, child: ColoredBox(color: bar)),
-        ]),
-      ),
+      padding: padding,
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(radius), border: Border.all(color: bar.withOpacity(0.18), width: 1.4), boxShadow: _soft(bar, 0.10)),
+      child: child,
     );
   }
 
   Widget _btn(String label, IconData icon, Color color, VoidCallback? onTap, {bool expand = false, bool small = false}) {
-    final b = ElevatedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: small ? 16 : 18),
-      label: Text(label, style: TextStyle(fontSize: small ? 13 : 14, fontWeight: FontWeight.w600)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: color,
-        disabledForegroundColor: Colors.white,
-        elevation: 0,
-        padding: EdgeInsets.symmetric(horizontal: 18, vertical: small ? 10 : 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+    final dark = Color.lerp(color, Colors.black, 0.24)!;
+    return Opacity(
+      opacity: onTap == null ? 0.5 : 1,
+      child: Container(
+        width: expand ? double.infinity : null,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color, dark]),
+          borderRadius: BorderRadius.circular(small ? 14 : 18),
+          boxShadow: onTap == null ? null : [BoxShadow(color: color.withOpacity(0.38), blurRadius: 14, offset: const Offset(0, 6))],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(small ? 14 : 18),
+            onTap: onTap,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: small ? 14 : 20, vertical: small ? 10 : 15),
+              child: Row(mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, size: small ? 17 : 20, color: Colors.white),
+                SizedBox(width: small ? 6 : 9),
+                Flexible(child: Text(label, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: small ? 13.5 : 15.5))),
+              ]),
+            ),
+          ),
+        ),
       ),
     );
-    return expand ? SizedBox(width: double.infinity, child: b) : b;
   }
 
-  Widget _upgradeBtn(String label, {IconData icon = Icons.workspace_premium}) => InkWell(
-        onTap: _openPayment,
-        borderRadius: BorderRadius.circular(8),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 13),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF9C27B0), Color(0xFF7B1FA2)]),
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [BoxShadow(color: const Color(0xFF9C27B0).withAlpha(77), blurRadius: 15, offset: const Offset(0, 4))],
+  Widget _ghostBtn(String label, IconData icon, Color color, VoidCallback? onTap, {bool small = false, bool expand = false}) => Opacity(
+        opacity: onTap == null ? 0.5 : 1,
+        child: Material(
+          color: color.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(small ? 14 : 18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(small ? 14 : 18),
+            onTap: onTap,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: small ? 14 : 18, vertical: small ? 10 : 13),
+              child: Row(mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, size: small ? 17 : 19, color: color),
+                const SizedBox(width: 7),
+                Flexible(child: Text(label, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: small ? 13.5 : 15))),
+              ]),
+            ),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          ]),
         ),
       );
 
-  Widget _howBtn() => InkWell(
-        onTap: () {
-          setState(() => _showHow = true);
-          Future.delayed(const Duration(milliseconds: 120), () {
-            if (_scroll.hasClients) _scroll.animateTo(_scroll.position.maxScrollExtent * .45, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
-          });
-        },
-        borderRadius: BorderRadius.circular(30),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [_C.info, _C.primary]),
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.help, color: Colors.white, size: 18),
-            SizedBox(width: 8),
-            Text('How It Works', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ]),
-        ),
-      );
+  Widget _upgradeBtn(String label, {IconData icon = Icons.workspace_premium_rounded}) => _btn(label, icon, _C.payment, _openPayment);
+
+  Widget _howBtn() => _ghostBtn('How it works', Icons.lightbulb_outline_rounded, _C.primary, _openHow, small: true);
 
   Widget _pill(String t) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(color: Colors.white.withAlpha(51), borderRadius: BorderRadius.circular(20)),
-        child: Text(t, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(color: _C.primary.withOpacity(0.10), borderRadius: BorderRadius.circular(20)),
+        child: Text(t, style: const TextStyle(color: _C.primary, fontWeight: FontWeight.w800, fontSize: 13.5)),
       );
 
   Widget _label(IconData icon, String text, {Color color = _C.text}) => Padding(
-        padding: const EdgeInsets.only(top: 14, bottom: 6),
+        padding: const EdgeInsets.only(top: 16, bottom: 8),
         child: Row(children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Flexible(child: Text(text, style: TextStyle(fontWeight: FontWeight.w600, color: color))),
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(color: _C.primary.withOpacity(0.11), borderRadius: BorderRadius.circular(9)),
+            child: Icon(icon, size: 15, color: _C.primary),
+          ),
+          const SizedBox(width: 9),
+          Flexible(child: Text(text, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: color))),
         ]),
       );
+
 
   void _setActive(TextEditingController c, String label) {
     _activeCtrl = c;
@@ -789,234 +909,415 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
   // ───────────────────────────── BUILD ─────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F6F9),
-      appBar: AppBar(
-        elevation: 0,
-        foregroundColor: Colors.white,
-        flexibleSpace: Container(decoration: const BoxDecoration(gradient: _C.headerGradient)),
-        title: const Text('Add Exam', style: TextStyle(fontWeight: FontWeight.w800)),
-      ),
-      floatingActionButton: (_formVisible && !_loading)
-          ? FloatingActionButton.extended(
-              onPressed: _openScientific,
-              backgroundColor: _C.sci,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.science),
-              label: const Text('Scientific Tools', style: TextStyle(fontWeight: FontWeight.w600)),
-            )
-          : null,
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _C.primary))
-          : RefreshIndicator(
+    final showForm = _formVisible && !_loading;
+    return Theme(
+      data: _lightTheme(),
+      child: Scaffold(
+        backgroundColor: _C.lightBg,
+        body: Stack(children: [
+          const Positioned.fill(child: _AuroraBackdrop()),
+          if (_loading)
+            _loader()
+          else
+            RefreshIndicator(
               color: _C.primary,
+              edgeOffset: 90,
               onRefresh: _refreshAll,
               child: ListView(
                 controller: _scroll,
+                padding: EdgeInsets.zero,
                 keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
                 children: [
-                  if (_banner != null) _alertBox(),
-                  if (_pendingRef != null) _pendingPaymentBox(),
-                  if (_hasFreeTrial) _freeTrialBanner(),
-                  if (_cbtEnabled && !_hasFreeTrial) _subscriptionBanner(),
+                  _hero(),
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      const Icon(Icons.add_circle, color: _C.primary),
-                      const SizedBox(width: 8),
-                      Text(_editSubjectId > 0 ? 'Edit Draft' : 'Create New Exam',
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _C.text)),
+                    padding: EdgeInsets.fromLTRB(16, 18, 16, showForm ? 170 : 44),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      if (_banner != null) _alertBox(),
+                      if (_pendingRef != null) _pendingPaymentBox(),
+                      _planCard(),
+                      _steps(),
+                      const SizedBox(height: 18),
+                      _selectionCard(),
+                      const SizedBox(height: 18),
+                      _formVisible ? _examForm() : _selectFirstBox(),
+                      KeyedSubtree(key: _subjectsKey, child: _subjectsSection()),
                     ]),
                   ),
-                  _selectionCard(),
-                  const SizedBox(height: 22),
-                  _formVisible ? _examForm() : _selectFirstBox(),
-                  if (_showHow) ...[const SizedBox(height: 24), _howItWorks()],
-                  const SizedBox(height: 28),
-                  KeyedSubtree(key: _subjectsKey, child: _subjectsSection()),
                 ],
               ),
             ),
+          if (showForm) Positioned(left: 0, right: 0, bottom: 0, child: _dock()),
+          if (showForm) Positioned(right: 16, bottom: 132, child: _sciFab()),
+        ]),
+      ),
     );
   }
 
-  // ───────────────────────────── alerts / banners ─────────────────────────────
+  Widget _loader() => Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(shape: BoxShape.circle, gradient: _C.ctaGradient, boxShadow: _soft(_C.primary, 0.35)),
+            child: const Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(strokeWidth: 4, color: Colors.white)),
+          ),
+          const SizedBox(height: 18),
+          const Text('Loading your workspace…', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _C.muted)),
+        ]),
+      );
+
+  // ───────────────────────────── hero ─────────────────────────────
+  Widget _circleGlass(IconData icon, VoidCallback onTap, {String? tip}) => Tooltip(
+        message: tip ?? '',
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: _glass(radius: 22, padding: const EdgeInsets.all(11), opacity: 0.16, child: Icon(icon, color: Colors.white, size: 22)),
+        ),
+      );
+
+  Widget _heroStat(IconData icon, String value, String label) => Expanded(
+        child: _glass(
+          radius: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, color: Colors.white, size: 19),
+            const SizedBox(height: 8),
+            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(0.82), fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      );
+
+  Widget _hero() {
+    final top = MediaQuery.of(context).padding.top;
+    final canPop = Navigator.of(context).canPop();
+    final plan = _hasActive && !_hasFreeTrial ? 'Pro' : (_hasFreeTrial ? 'Trial' : 'No plan');
+    final left = _hasFreeTrial ? '$_remaining left' : (_hasActive ? 'Unlimited' : '—');
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(38)),
+      child: Container(
+        decoration: const BoxDecoration(gradient: _C.heroGradient),
+        padding: EdgeInsets.fromLTRB(18, top + 10, 18, 24),
+        child: Stack(children: [
+          Positioned(top: -70, right: -50, child: Container(width: 220, height: 220, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [const Color(0xFF22D3EE).withOpacity(0.55), const Color(0xFF22D3EE).withOpacity(0)])))),
+          Positioned(bottom: -60, left: -40, child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [const Color(0xFFEC4899).withOpacity(0.45), const Color(0xFFEC4899).withOpacity(0)])))),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              if (canPop) _circleGlass(Icons.arrow_back_rounded, () => Navigator.of(context).maybePop(), tip: 'Back'),
+              const Spacer(),
+              _circleGlass(Icons.lightbulb_outline_rounded, _openHow, tip: 'How it works'),
+            ]),
+            const SizedBox(height: 18),
+            Text(_editSubjectId > 0 ? 'Edit draft' : 'Create exam', style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900, height: 1.05, letterSpacing: -0.5)),
+            const SizedBox(height: 8),
+            Text('Set up, write questions and publish — all from your phone.', style: TextStyle(color: Colors.white.withOpacity(0.86), fontSize: 15.5, height: 1.35)),
+            const SizedBox(height: 18),
+            Row(children: [
+              _heroStat(Icons.library_books_rounded, '$_total', 'Exams'),
+              const SizedBox(width: 10),
+              _heroStat(Icons.workspace_premium_rounded, plan, 'Plan'),
+              const SizedBox(width: 10),
+              _heroStat(Icons.bolt_rounded, left, 'Allowance'),
+            ]),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  // ───────────────────────────── notices ─────────────────────────────
   Widget _alertBox() {
     final err = _bannerError;
+    final c = err ? _C.danger : _C.success;
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: err ? const Color(0xFFF8D7DA) : const Color(0xFFD4EDDA),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: err ? const Color(0xFFF5C6CB) : const Color(0xFFC3E6CB)),
-      ),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(color: c.withOpacity(0.10), borderRadius: BorderRadius.circular(22), border: Border.all(color: c.withOpacity(0.4), width: 1.4)),
       child: Row(children: [
-        Icon(err ? Icons.error : Icons.check_circle, color: err ? const Color(0xFF721C24) : const Color(0xFF155724)),
-        const SizedBox(width: 10),
-        Expanded(child: Text(_banner!, style: TextStyle(color: err ? const Color(0xFF721C24) : const Color(0xFF155724)))),
-        InkWell(onTap: () => setState(() => _banner = null), child: const Icon(Icons.close, size: 18)),
+        Container(width: 38, height: 38, decoration: BoxDecoration(color: c, shape: BoxShape.circle), child: Icon(err ? Icons.priority_high_rounded : Icons.check_rounded, color: Colors.white, size: 22)),
+        const SizedBox(width: 12),
+        Expanded(child: Text(_banner!, style: TextStyle(color: Color.lerp(c, Colors.black, 0.45), fontSize: 15, fontWeight: FontWeight.w700, height: 1.3))),
+        IconButton(onPressed: () => setState(() => _banner = null), icon: Icon(Icons.close_rounded, color: Color.lerp(c, Colors.black, 0.45))),
       ]),
     );
   }
 
   Widget _pendingPaymentBox() => Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFFFEAA7))),
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: _C.warning.withOpacity(0.12), borderRadius: BorderRadius.circular(24), border: Border.all(color: _C.warning.withOpacity(0.5), width: 1.4)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [
-            Icon(Icons.schedule, color: Color(0xFF856404)),
-            SizedBox(width: 8),
-            Expanded(child: Text('Waiting for your payment', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF856404)))),
-          ]),
-          const SizedBox(height: 6),
-          const Text('Finished paying on Flutterwave? Tap verify to activate your plan.', style: TextStyle(color: Color(0xFF856404))),
-          const SizedBox(height: 10),
           Row(children: [
-            _btn('Verify Payment', Icons.verified, _C.success, () => _verifyPayment(), small: true),
-            const SizedBox(width: 8),
-            TextButton(onPressed: () => setState(() => _pendingRef = null), child: const Text('Dismiss')),
+            Container(width: 38, height: 38, decoration: const BoxDecoration(color: _C.warning, shape: BoxShape.circle), child: const Icon(Icons.hourglass_top_rounded, color: Colors.white, size: 20)),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Waiting for your payment', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF78350F)))),
+          ]),
+          const SizedBox(height: 8),
+          const Text('Finished paying on Flutterwave? Tap verify to activate your plan.', style: TextStyle(color: Color(0xFF78350F), fontSize: 14.5, height: 1.4)),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _btn('Verify payment', Icons.verified_rounded, _C.success, () => _verifyPayment(), small: true),
+            _ghostBtn('Dismiss', Icons.close_rounded, _C.draft, () => setState(() => _pendingRef = null), small: true),
           ]),
         ]),
       );
 
-  Widget _freeTrialBanner() {
-    final pct = _trialLimit == 0 ? 0.0 : (_subjectCount / _trialLimit).clamp(0.0, 1.0);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 22),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(gradient: _C.bannerGradient, borderRadius: BorderRadius.circular(10)),
-      child: Column(children: [
-        const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.card_giftcard, color: Colors.white),
-          SizedBox(width: 8),
-          Text('Free Trial Active!', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold)),
-        ]),
-        const SizedBox(height: 8),
-        Text(_trialMsg, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-        const SizedBox(height: 14),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox(
-            height: 20,
-            child: LinearProgressIndicator(value: pct, backgroundColor: Colors.white.withAlpha(51), valueColor: const AlwaysStoppedAnimation(Color(0xFF4CAF50))),
-          ),
+  Widget _planShell({required IconData icon, required Color color, required String title, required String body, String? foot, Widget? leading, required List<Widget> actions}) => Container(
+        margin: const EdgeInsets.only(bottom: 18),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.13), Colors.white]),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: color.withOpacity(0.35), width: 1.4),
+          boxShadow: _soft(color, 0.12),
         ),
-        const SizedBox(height: 12),
-        Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
-          _pill('$_subjectCount / $_trialLimit Subjects'),
-          _pill('$_remaining Remaining'),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            leading ?? Container(width: 56, height: 56, decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [color, Color.lerp(color, Colors.black, 0.25)!]), boxShadow: _soft(color, 0.35)), child: Icon(icon, color: Colors.white, size: 28)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _C.text)),
+                const SizedBox(height: 4),
+                Text(body, style: const TextStyle(fontSize: 14.5, color: _C.muted, height: 1.4)),
+                if (foot != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(foot, style: const TextStyle(fontSize: 12.5, color: _C.hint))),
+              ]),
+            ),
+          ]),
+          if (actions.isNotEmpty) ...[const SizedBox(height: 14), Wrap(spacing: 10, runSpacing: 10, children: actions)],
         ]),
-        const SizedBox(height: 14),
-        Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          _upgradeBtn('Upgrade Now', icon: Icons.workspace_premium),
-          _howBtn(),
-        ]),
-      ]),
-    );
-  }
+      );
 
-  Widget _subscriptionBanner() {
-    final sub = _status['subscription'] is Map ? Map<String, dynamic>.from(_status['subscription']) : null;
-    Widget head(IconData i, String t) => Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(i, color: Colors.white),
-          const SizedBox(width: 8),
-          Flexible(child: Text(t, style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold))),
-        ]);
-    final List<Widget> info;
-    if (_hasActive && !_hasFreeTrial && sub != null) {
-      info = [
-        head(Icons.shield, 'CBT Access Active'),
-        const SizedBox(height: 8),
-        Text('Your ${sub['plan_type']} Plan subscription is valid until ${sub['expires']}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-        Text('Reference: ${sub['reference']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-      ];
-    } else if (!_canCreate) {
-      info = [
-        head(Icons.lock, 'Upgrade Required'),
-        const SizedBox(height: 8),
-        Text(_trialMsg, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-        if (_subjectCount >= _trialLimit)
-          Text("You've used all $_trialLimit free trial subjects.", textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-      ];
-    } else {
-      info = [
-        head(Icons.rocket_launch, 'Get Started'),
-        const SizedBox(height: 8),
-        const Text('Subscribe to a plan to create and manage unlimited exams', textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
-      ];
+  Widget _planCard() {
+    if (_hasFreeTrial) {
+      final pct = _trialLimit == 0 ? 0.0 : (_subjectCount / _trialLimit).clamp(0.0, 1.0);
+      return _planShell(
+        icon: Icons.card_giftcard_rounded,
+        color: _C.success,
+        title: 'Free trial active',
+        body: _trialMsg,
+        leading: SizedBox(
+          width: 64,
+          height: 64,
+          child: Stack(alignment: Alignment.center, children: [
+            SizedBox(width: 64, height: 64, child: CircularProgressIndicator(value: pct, strokeWidth: 7, backgroundColor: _C.border, color: _C.success, strokeCap: StrokeCap.round)),
+            Text('$_subjectCount/$_trialLimit', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: _C.text)),
+          ]),
+        ),
+        foot: '$_remaining subject${_remaining == 1 ? '' : 's'} remaining',
+        actions: [_upgradeBtn('Upgrade now'), _howBtn()],
+      );
     }
-    return Container(
-      margin: const EdgeInsets.only(bottom: 22),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(gradient: _C.bannerGradient, borderRadius: BorderRadius.circular(10)),
-      child: Column(children: [
-        ...info,
-        const SizedBox(height: 14),
-        Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          if (!_hasActive || _hasFreeTrial) _upgradeBtn(_hasFreeTrial ? 'Upgrade Now' : 'Subscribe Now'),
-          _howBtn(),
-        ]),
-      ]),
+    if (!_cbtEnabled) return const SizedBox.shrink();
+    final sub = _status['subscription'] is Map ? Map<String, dynamic>.from(_status['subscription']) : null;
+    if (_hasActive && sub != null) {
+      return _planShell(
+        icon: Icons.verified_user_rounded,
+        color: _C.success,
+        title: 'CBT access active',
+        body: 'Your ${sub['plan_type']} plan is valid until ${sub['expires']}.',
+        foot: 'Reference: ${sub['reference']}',
+        actions: [_howBtn()],
+      );
+    }
+    if (!_canCreate) {
+      return _planShell(
+        icon: Icons.lock_rounded,
+        color: _C.payment,
+        title: 'Upgrade required',
+        body: _subjectCount >= _trialLimit ? "$_trialMsg You've used all $_trialLimit free trial subjects." : _trialMsg,
+        actions: [_upgradeBtn('Subscribe now'), _howBtn()],
+      );
+    }
+    return _planShell(
+      icon: Icons.rocket_launch_rounded,
+      color: _C.primary,
+      title: 'Get started',
+      body: 'Subscribe to a plan to create and manage unlimited exams.',
+      actions: [_upgradeBtn('Subscribe now'), _howBtn()],
     );
   }
 
-  // ───────────────────────────── Select Academic Details ─────────────────────────────
-  Widget _dd(String label, IconData icon, int? value, String allLabel, List<Map<String, dynamic>> items, String idKey,
-      String nameKey, ValueChanged<int?> onChanged) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _label(icon, label),
-      DropdownButtonFormField<int?>(
-        value: value,
-        isExpanded: true,
-        decoration: _dec(allLabel),
-        items: [
-          DropdownMenuItem<int?>(value: null, child: Text(allLabel)),
-          ...items.map((m) => DropdownMenuItem<int?>(value: _toInt(m[idKey]), child: Text('${m[nameKey]}', overflow: TextOverflow.ellipsis))),
-        ],
-        onChanged: onChanged,
+  // ───────────────────────────── step rail ─────────────────────────────
+  int get _stepIndex {
+    if (!_formVisible) return 0;
+    final hasQ = _questions.any((q) => q.text.text.trim().isNotEmpty);
+    return (_titleCtrl.text.trim().isNotEmpty && hasQ) ? 2 : 1;
+  }
+
+  Widget _steps() {
+    const labels = ['Setup', 'Questions', 'Publish'];
+    const icons = [Icons.tune_rounded, Icons.edit_note_rounded, Icons.rocket_launch_rounded];
+    final cur = _stepIndex;
+    Widget node(int i) {
+      final done = i < cur, now = i == cur;
+      return Column(mainAxisSize: MainAxisSize.min, children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 260),
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: done ? _C.goGradient : (now ? _C.ctaGradient : null),
+            color: (done || now) ? null : Colors.white,
+            border: (done || now) ? null : Border.all(color: _C.border, width: 1.8),
+            boxShadow: now ? _soft(_C.primary, 0.4) : null,
+          ),
+          child: Icon(done ? Icons.check_rounded : icons[i], color: (done || now) ? Colors.white : _C.hint, size: 22),
+        ),
+        const SizedBox(height: 6),
+        Text(labels[i], style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: (done || now) ? _C.text : _C.hint)),
+      ]);
+    }
+
+    Widget bar(int i) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 22),
+            child: AnimatedContainer(duration: const Duration(milliseconds: 260), height: 5, decoration: BoxDecoration(borderRadius: BorderRadius.circular(5), gradient: i < cur ? _C.goGradient : null, color: i < cur ? null : _C.border)),
+          ),
+        );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26), border: Border.all(color: _C.border, width: 1.4), boxShadow: _soft()),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [node(0), bar(0), node(1), bar(1), node(2)]),
+    );
+  }
+
+  // ───────────────────────────── setup (session · term · class) ─────────────────────────────
+  Widget _pickTile(IconData icon, String label, int? value, List<Map<String, dynamic>> items, String idKey, String nameKey, ValueChanged<int?> onPick, Color color) {
+    final name = value == null ? null : _nameOf(items, idKey, nameKey, value);
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: () => _openPicker(label, icon, items, idKey, nameKey, value, onPick, color),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(color: name != null ? color.withOpacity(0.07) : _C.field, borderRadius: BorderRadius.circular(22), border: Border.all(color: name != null ? color.withOpacity(0.55) : _C.border, width: 1.6)),
+        child: Row(children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color, Color.lerp(color, Colors.black, 0.25)!]), boxShadow: _soft(color, 0.3)),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label.toUpperCase(), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: _C.muted, letterSpacing: 1)),
+              const SizedBox(height: 2),
+              Text(name ?? 'Tap to choose', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.w800, color: name != null ? _C.text : _C.hint)),
+            ]),
+          ),
+          Icon(name != null ? Icons.check_circle_rounded : Icons.unfold_more_rounded, color: name != null ? color : _C.hint),
+        ]),
       ),
-    ]);
+    );
+  }
+
+  void _openPicker(String title, IconData icon, List<Map<String, dynamic>> items, String idKey, String nameKey, int? current, ValueChanged<int?> onPick, Color color) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.62,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        builder: (ctx, sc) {
+          Widget row(String text, int? id, {bool clear = false}) {
+            final sel = id == current && !clear || (clear && current == null);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onPick(id);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(color: sel ? color.withOpacity(0.10) : _C.field, borderRadius: BorderRadius.circular(20), border: Border.all(color: sel ? color : _C.border, width: sel ? 2 : 1.4)),
+                  child: Row(children: [
+                    Expanded(child: Text(text, style: TextStyle(fontSize: 17, fontWeight: sel ? FontWeight.w900 : FontWeight.w700, color: clear ? _C.muted : _C.text))),
+                    if (sel) Icon(Icons.check_circle_rounded, color: color) else Icon(clear ? Icons.close_rounded : Icons.radio_button_unchecked_rounded, color: _C.hint, size: 22),
+                  ]),
+                ),
+              ),
+            );
+          }
+
+          return Container(
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(34))),
+            child: Column(children: [
+              const SizedBox(height: 10),
+              Container(width: 46, height: 5, decoration: BoxDecoration(color: _C.border, borderRadius: BorderRadius.circular(3))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 10),
+                child: Row(children: [
+                  Container(width: 44, height: 44, decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(15)), child: Icon(icon, color: color)),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Select $title', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900))),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded)),
+                ]),
+              ),
+              Expanded(
+                child: ListView(controller: sc, padding: const EdgeInsets.fromLTRB(16, 4, 16, 28), children: [
+                  row('No selection', null, clear: true),
+                  for (final m in items) row('${m[nameKey]}', _toInt(m[idKey])),
+                  if (items.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('Nothing available yet.', textAlign: TextAlign.center, style: TextStyle(color: _C.muted, fontSize: 15.5))),
+                ]),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
   }
 
   Widget _selectionCard() {
-    final applied = _sessionId != null || _termId != null || _classId != null;
     return _accentCard(
-      bar: const Color(0xFF3498DB),
-      barWidth: 5,
+      bar: _C.primary,
       padding: const EdgeInsets.all(18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Icon(Icons.filter_alt, color: _C.text),
-          SizedBox(width: 8),
-          Text('Select Academic Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _C.text)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Container(width: 46, height: 46, decoration: BoxDecoration(gradient: _C.ctaGradient, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.tune_rounded, color: Colors.white)),
+          const SizedBox(width: 12),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Exam setup', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), Text('Where does this exam belong?', style: TextStyle(fontSize: 14, color: _C.muted))])),
+          _pill('Step 1'),
         ]),
-        _dd('Academic Session', Icons.calendar_month, _pSession, '-- All Sessions --', _sessions, 'id', 'session_name', (v) => setState(() => _pSession = v)),
-        _dd('Term', Icons.menu_book, _pTerm, '-- All Terms --', _terms, 'id', 'term_name', (v) => setState(() => _pTerm = v)),
-        _dd('Class', Icons.groups, _pClass, '-- All Classes --', _classes, 'class_id', 'class_name', (v) => setState(() => _pClass = v)),
-        const SizedBox(height: 18),
-        Wrap(alignment: WrapAlignment.center, spacing: 10, runSpacing: 10, children: [
-          _btn('Apply Filters', Icons.filter_alt, _C.primary, _applyFilters),
-          _btn('Clear Filters', Icons.close, _C.draft, _clearFilters),
+        const SizedBox(height: 16),
+        _pickTile(Icons.calendar_month_rounded, 'Session', _pSession, _sessions, 'id', 'session_name', (v) => setState(() => _pSession = v), _C.primary),
+        const SizedBox(height: 10),
+        _pickTile(Icons.auto_stories_rounded, 'Term', _pTerm, _terms, 'id', 'term_name', (v) => setState(() => _pTerm = v), _C.sci),
+        const SizedBox(height: 10),
+        _pickTile(Icons.groups_rounded, 'Class', _pClass, _classes, 'class_id', 'class_name', (v) => setState(() => _pClass = v), _C.info),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(flex: 3, child: _btn('Apply', Icons.check_circle_rounded, _C.primary, _applyFilters, expand: true)),
+          const SizedBox(width: 10),
+          Expanded(flex: 2, child: _ghostBtn('Reset', Icons.restart_alt_rounded, _C.draft, _clearFilters, expand: true)),
         ]),
-        if (applied) ...[
-          const SizedBox(height: 18),
+        if (!(_pSession != null && _pTerm != null && _pClass != null))
+          const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Row(children: [Icon(Icons.info_outline_rounded, size: 17, color: _C.hint), SizedBox(width: 6), Expanded(child: Text('Choose a session, term and class to start writing questions.', style: TextStyle(fontSize: 13.5, color: _C.muted)))]),
+          ),
+        if (_formVisible) ...[
+          const SizedBox(height: 14),
           Container(
-            width: double.infinity,
-            decoration: BoxDecoration(color: _C.lightBg, borderRadius: BorderRadius.circular(8), border: const Border(left: BorderSide(color: Color(0xFF27AE60), width: 4))),
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: _C.success.withOpacity(0.09), borderRadius: BorderRadius.circular(20), border: Border.all(color: _C.success.withOpacity(0.35))),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Row(children: [
-                Icon(Icons.check_circle, color: Color(0xFF27AE60), size: 18),
-                SizedBox(width: 6),
-                Text('Current Filters Applied:', style: TextStyle(fontWeight: FontWeight.bold)),
-              ]),
+              const Row(children: [Icon(Icons.check_circle_rounded, color: _C.success, size: 19), SizedBox(width: 7), Text('Ready to write for', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF065F46), fontSize: 14.5))]),
               const SizedBox(height: 8),
-              if (_sessionId != null) _infoItem(Icons.calendar_month, 'Session', _nameOf(_sessions, 'id', 'session_name', _sessionId)),
-              if (_termId != null) _infoItem(Icons.menu_book, 'Term', _nameOf(_terms, 'id', 'term_name', _termId)),
-              if (_classId != null) _infoItem(Icons.groups, 'Class', _nameOf(_classes, 'class_id', 'class_name', _classId)),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _ctxChip(Icons.calendar_month_rounded, _nameOf(_sessions, 'id', 'session_name', _sessionId)),
+                _ctxChip(Icons.auto_stories_rounded, _nameOf(_terms, 'id', 'term_name', _termId)),
+                _ctxChip(Icons.groups_rounded, _nameOf(_classes, 'class_id', 'class_name', _classId)),
+              ]),
             ]),
           ),
         ],
@@ -1024,240 +1325,270 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
     );
   }
 
-  Widget _infoItem(IconData i, String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(children: [
-          Icon(i, size: 16, color: _C.primary),
-          const SizedBox(width: 8),
-          Expanded(child: Text.rich(TextSpan(children: [TextSpan(text: '$k: ', style: const TextStyle(fontWeight: FontWeight.bold)), TextSpan(text: v)]))),
-        ]),
+  Widget _ctxChip(IconData i, String t) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _C.border)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 16, color: _C.primary), const SizedBox(width: 6), Text(t, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14))]),
       );
 
   Widget _selectFirstBox() => Container(
-        padding: const EdgeInsets.all(34),
-        decoration: BoxDecoration(color: _C.lightBg, borderRadius: BorderRadius.circular(10)),
-        child: const Column(children: [
-          Icon(Icons.filter_alt, size: 48, color: Color(0xFF3498DB)),
-          SizedBox(height: 16),
-          Text('Select Academic Details First', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-          SizedBox(height: 8),
-          Text('Please select a session, term, and class above to create exams.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF666666))),
+        padding: const EdgeInsets.fromLTRB(24, 34, 24, 34),
+        decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), borderRadius: BorderRadius.circular(30), border: Border.all(color: _C.border, width: 1.4)),
+        child: Column(children: [
+          Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(shape: BoxShape.circle, gradient: _C.ctaGradient, boxShadow: _soft(_C.primary, 0.4)),
+            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 44),
+          ),
+          const SizedBox(height: 20),
+          const Text('Start with the setup', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          const Text('Pick a session, term and class above and your exam editor will unlock right here.', textAlign: TextAlign.center, style: TextStyle(fontSize: 15.5, color: _C.muted, height: 1.45)),
         ]),
       );
 
-  // ───────────────────────────── Exam form ─────────────────────────────
+  // ───────────────────────────── exam form ─────────────────────────────
+  Widget _numBadge(String n, Gradient g) => Container(
+        width: 46,
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(gradient: g, borderRadius: BorderRadius.circular(16), boxShadow: _soft(const Color(0xFF5B4BFF), 0.3)),
+        child: Text(n, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+      );
+
+  Widget _iconBtn(IconData i, Color c, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(width: 42, height: 42, decoration: BoxDecoration(color: c.withOpacity(0.11), borderRadius: BorderRadius.circular(14)), child: Icon(i, color: c, size: 22)),
+      );
+
+  Widget _addTile(String label, IconData icon, Color color, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(26),
+        child: _Dashed(
+          color: color,
+          background: color.withOpacity(0.06),
+          radius: 26,
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Container(width: 36, height: 36, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 22)),
+            const SizedBox(width: 12),
+            Text(label, style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: color)),
+          ]),
+        ),
+      );
+
   Widget _examForm() {
     final locked = !_canCreate && _editSubjectId == 0;
-    final form = Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Colors.black.withAlpha(26), blurRadius: 10, offset: const Offset(0, 3))]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _label(Icons.menu_book, 'Exam Title / Subject Name:'),
-        TextField(controller: _titleCtrl, readOnly: locked, decoration: _dec('e.g Biology SS3')),
-        const SizedBox(height: 6),
-        for (int i = 0; i < _questions.length; i++) _questionCard(i),
-        const SizedBox(height: 16),
-        Align(alignment: Alignment.centerLeft, child: _btn('Add Another Question', Icons.add, _C.info, _addQuestion)),
-        const SizedBox(height: 24),
-        _theorySection(),
-        const SizedBox(height: 24),
-        Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, children: [
-          _btn(_editSubjectId > 0 ? 'Update Draft' : 'Save as Draft', Icons.save, _C.draft, _saving ? null : () => _save('draft')),
-          _btn(_editSubjectId > 0 ? 'Publish Updated Exam' : 'Publish Exam', Icons.send, _C.success, _saving ? null : () => _save('publish')),
+    final form = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _accentCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [_numBadge('2', _C.ctaGradient), const SizedBox(width: 12), const Expanded(child: Text('Exam title', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)))]),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _titleCtrl,
+            readOnly: locked,
+            onChanged: (_) => setState(() {}),
+            textCapitalization: TextCapitalization.words,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _C.text),
+            decoration: _dec('e.g. Biology SS3', icon: Icons.menu_book_rounded),
+          ),
         ]),
-        if (_saving) const Padding(padding: EdgeInsets.only(top: 14), child: Center(child: CircularProgressIndicator(color: _C.primary))),
-      ]),
-    );
+      ),
+      const SizedBox(height: 16),
+      for (int i = 0; i < _questions.length; i++) _questionCard(i),
+      _addTile('Add question', Icons.add_rounded, _C.primary, _addQuestion),
+      const SizedBox(height: 16),
+      _theorySection(),
+    ]);
     if (!locked) return form;
-    return Stack(children: [form, Positioned.fill(child: _upgradeOverlay())]);
+    return Stack(children: [
+      Opacity(opacity: 0.3, child: IgnorePointer(child: form)),
+      Positioned.fill(child: _upgradeOverlay()),
+    ]);
   }
 
   Widget _upgradeOverlay() => Container(
-        decoration: BoxDecoration(color: Colors.white.withAlpha(242), borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: Colors.white.withOpacity(0.93), borderRadius: BorderRadius.circular(30), border: Border.all(color: _C.payment.withOpacity(0.3), width: 1.4)),
+        padding: const EdgeInsets.all(22),
         child: Center(
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.workspace_premium, color: _C.payment),
-                SizedBox(width: 8),
-                Text('Upgrade Required', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              ]),
-              const SizedBox(height: 10),
-              Text(_trialMsg, textAlign: TextAlign.center),
+              Container(width: 76, height: 76, decoration: BoxDecoration(shape: BoxShape.circle, gradient: _C.ctaGradient, boxShadow: _soft(_C.payment, 0.4)), child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 38)),
+              const SizedBox(height: 14),
+              const Text('Upgrade required', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              Text(_trialMsg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15.5, color: _C.muted, height: 1.4)),
               if (_subjectCount >= _trialLimit) ...[
-                const SizedBox(height: 8),
-                Text.rich(TextSpan(children: [
-                  const TextSpan(text: 'You have successfully created '),
-                  TextSpan(text: '$_subjectCount subjects', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const TextSpan(text: ' during your free trial.'),
-                ]), textAlign: TextAlign.center),
-                const SizedBox(height: 6),
-                const Text('To continue creating exams, please upgrade to a paid plan.', textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                Text('You created $_subjectCount subjects during your free trial. Upgrade to keep creating exams.', textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, height: 1.4)),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: _C.lightBg, borderRadius: BorderRadius.circular(10)),
-                  child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [Icon(Icons.star, size: 18, color: _C.warning), SizedBox(width: 6), Text('Upgrade Benefits:', style: TextStyle(fontWeight: FontWeight.bold))]),
-                    SizedBox(height: 8),
-                    Text('•  Create unlimited exam subjects'),
-                    Text('•  Add unlimited questions per subject'),
-                    Text('•  Include theory questions with images'),
-                    Text('•  Priority support'),
-                    Text('•  Advanced exam analytics'),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: _C.field, borderRadius: BorderRadius.circular(20)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    for (final t in ['Unlimited exam subjects', 'Unlimited questions per subject', 'Theory questions with images', 'Priority support', 'Advanced exam analytics'])
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(children: [const Icon(Icons.check_circle_rounded, size: 19, color: _C.success), const SizedBox(width: 9), Expanded(child: Text(t, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)))])),
                   ]),
                 ),
               ] else if (!_hasActive && !_hasFreeTrial) ...[
                 const SizedBox(height: 8),
-                Text('Start with our free trial to create up to $_trialLimit subjects!', textAlign: TextAlign.center),
+                Text('Start with our free trial to create up to $_trialLimit subjects!', textAlign: TextAlign.center, style: const TextStyle(fontSize: 15.5)),
               ],
               const SizedBox(height: 16),
-              _upgradeBtn(_hasFreeTrial ? 'Upgrade Now' : 'Get Started'),
-              const SizedBox(height: 12),
+              _upgradeBtn(_hasFreeTrial ? 'Upgrade now' : 'Get started'),
+              const SizedBox(height: 10),
               _howBtn(),
             ]),
           ),
         ),
       );
 
-  Widget _questionCard(int i) {
-    final q = _questions[i];
-    final hasPic = q.imageBytes != null || q.existingImageUrl != null;
-    return Padding(
-      padding: const EdgeInsets.only(top: 22),
-      child: _accentCard(
-        bg: _C.lightBg,
-        radius: 8,
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text.rich(TextSpan(children: [
-            TextSpan(text: 'Question ${i + 1} ', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _C.primary)),
-            const TextSpan(text: '(Multiple Choice)', style: TextStyle(fontSize: 14, color: Color(0xFF666666))),
-          ])),
-          const SizedBox(height: 10),
-          TextField(
-            controller: q.text,
-            minLines: 3,
-            maxLines: 6,
-            textInputAction: TextInputAction.newline,
-            onTap: () => _setActive(q.text, 'Question ${i + 1}'),
-            decoration: _dec('Enter your question here...'),
+  Widget _toolChip(String label, IconData icon, Color color, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.35))),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 19, color: color), const SizedBox(width: 7), Text(label, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color.lerp(color, Colors.black, 0.2)))]),
+        ),
+      );
+
+  Widget _optionRow(_Q q, int i, int k) {
+    final sel = q.answer == k + 1;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(color: sel ? _C.success.withOpacity(0.10) : _C.field, borderRadius: BorderRadius.circular(20), border: Border.all(color: sel ? _C.success : _C.border, width: sel ? 2 : 1.4)),
+      child: Row(children: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: GestureDetector(
+            onTap: () => setState(() => q.answer = sel ? null : k + 1),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(shape: BoxShape.circle, gradient: sel ? _C.goGradient : null, color: sel ? null : Colors.white, border: sel ? null : Border.all(color: _C.border, width: 1.8), boxShadow: sel ? _soft(_C.success, 0.4) : null),
+              child: sel ? const Icon(Icons.check_rounded, color: Colors.white, size: 24) : Text('ABCD'[k], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: _C.primary)),
+            ),
           ),
-          _label(Icons.image, 'Question Image (optional):'),
-          Row(children: [
-            OutlinedButton.icon(
-              onPressed: () => _pickImage(q),
-              icon: const Icon(Icons.upload_file, size: 18),
-              label: Text(q.imageBytes != null ? 'Change Image' : 'Choose Image'),
-              style: OutlinedButton.styleFrom(foregroundColor: _C.primary, side: const BorderSide(color: _C.primary)),
-            ),
-            if (hasPic) ...[
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () => setState(() {
-                  q.imageBytes = null;
-                  q.imageName = null;
-                  q.existingImage = null;
-                  q.existingImageUrl = null;
-                }),
-                icon: const Icon(Icons.close, size: 16, color: _C.danger),
-                label: const Text('Remove', style: TextStyle(color: _C.danger)),
-              ),
-            ],
-          ]),
-          if (hasPic)
-            Container(
-              margin: const EdgeInsets.only(top: 10),
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: _C.border), borderRadius: BorderRadius.circular(6)),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: q.imageBytes != null
-                    ? Image.memory(q.imageBytes!, height: 160, fit: BoxFit.contain)
-                    : Image.network(q.existingImageUrl!, height: 160, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image)))),
-              ),
-            ),
-          const SizedBox(height: 14),
-          for (int k = 0; k < 4; k++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: TextField(
-                controller: q.opts[k],
-                onTap: () => _setActive(q.opts[k], 'Question ${i + 1} · Option ${'ABCD'[k]}'),
-                decoration: _dec('Enter option ${'ABCD'[k]}'),
-              ),
-            ),
-          _label(Icons.check_circle, 'Correct Answer:'),
-          DropdownButtonFormField<int>(
-            value: q.answer,
-            isExpanded: true,
-            decoration: _dec('Select the correct answer'),
-            items: const [
-              DropdownMenuItem(value: 1, child: Text('Option A')),
-              DropdownMenuItem(value: 2, child: Text('Option B')),
-              DropdownMenuItem(value: 3, child: Text('Option C')),
-              DropdownMenuItem(value: 4, child: Text('Option D')),
-            ],
-            onChanged: (v) => setState(() => q.answer = v),
+        ),
+        Expanded(
+          child: TextField(
+            controller: q.opts[k],
+            onTap: () => _setActive(q.opts[k], 'Question ${i + 1} · Option ${'ABCD'[k]}'),
+            style: const TextStyle(fontSize: 16.5, color: _C.text, fontWeight: FontWeight.w600),
+            minLines: 1,
+            maxLines: 4,
+            decoration: InputDecoration(hintText: 'Option ${'ABCD'[k]}', hintStyle: const TextStyle(color: _C.hint, fontSize: 16), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 4)),
           ),
-          const SizedBox(height: 14),
-          _btn('Remove Question', Icons.delete, _C.danger, () => _removeQuestion(i)),
-        ]),
-      ),
+        ),
+        const SizedBox(width: 8),
+      ]),
     );
   }
 
-  // ───────────────────────────── Theory section ─────────────────────────────
-  Widget _theorySection() {
-    return _Dashed(
-      color: _C.theory,
-      background: const Color(0xFFFFF9E6),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        InkWell(
-          onTap: () => setState(() => _includeTheory = !_includeTheory),
-          borderRadius: BorderRadius.circular(5),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(color: _C.theory, borderRadius: BorderRadius.circular(5)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Checkbox(
-                value: _includeTheory,
-                onChanged: (v) => setState(() => _includeTheory = v ?? false),
-                activeColor: Colors.white,
-                checkColor: _C.theory,
-                side: const BorderSide(color: Colors.white, width: 2),
+  Widget _questionCard(int i) {
+    final q = _questions[i];
+    final hasPic = q.imageBytes != null || q.existingImageUrl != null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: _C.border, width: 1.4), boxShadow: _soft()),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          _numBadge('${i + 1}', _C.ctaGradient),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Question ${i + 1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), const Text('Multiple choice', style: TextStyle(fontSize: 13.5, color: _C.muted, fontWeight: FontWeight.w600))])),
+          if (q.answer != null) Container(margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7), decoration: BoxDecoration(color: _C.success.withOpacity(0.12), borderRadius: BorderRadius.circular(14)), child: Text('Answer ${'ABCD'[q.answer! - 1]}', style: const TextStyle(color: Color(0xFF047857), fontWeight: FontWeight.w900, fontSize: 13.5))),
+          _iconBtn(Icons.delete_outline_rounded, _C.danger, () => _removeQuestion(i)),
+        ]),
+        const SizedBox(height: 14),
+        TextField(
+          controller: q.text,
+          minLines: 3,
+          maxLines: 8,
+          textInputAction: TextInputAction.newline,
+          onTap: () => _setActive(q.text, 'Question ${i + 1}'),
+          onChanged: (_) {},
+          style: const TextStyle(fontSize: 16.5, color: _C.text, height: 1.4, fontWeight: FontWeight.w600),
+          decoration: _dec('Type question ${i + 1} here…'),
+        ),
+        const SizedBox(height: 12),
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          _toolChip(hasPic ? 'Change image' : 'Add image', Icons.add_photo_alternate_rounded, _C.info, () => _pickImage(q)),
+          _toolChip('Symbols', Icons.functions_rounded, _C.sci, _openScientific),
+        ]),
+        if (hasPic)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            decoration: BoxDecoration(color: _C.field, borderRadius: BorderRadius.circular(22), border: Border.all(color: _C.border)),
+            child: Stack(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 180,
+                  child: q.imageBytes != null
+                      ? Image.memory(q.imageBytes!, fit: BoxFit.contain)
+                      : Image.network(q.existingImageUrl!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_rounded, size: 36, color: _C.hint))),
+                ),
               ),
-              const Icon(Icons.edit_note, color: Colors.white, size: 20),
-              const SizedBox(width: 6),
-              const Flexible(child: Text('Include Theory Questions (Optional)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: InkWell(
+                  onTap: () => setState(() {
+                    q.imageBytes = null;
+                    q.imageName = null;
+                    q.existingImage = null;
+                    q.existingImageUrl = null;
+                  }),
+                  child: Container(width: 36, height: 36, decoration: const BoxDecoration(color: _C.danger, shape: BoxShape.circle), child: const Icon(Icons.close_rounded, color: Colors.white, size: 20)),
+                ),
+              ),
             ]),
           ),
+        const SizedBox(height: 18),
+        Row(children: [
+          const Text('Answer options', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(q.answer == null ? 'Tap a letter to mark the correct one' : 'Tap the green tick to change', style: TextStyle(fontSize: 12.5, color: q.answer == null ? _C.warning : _C.muted, fontWeight: FontWeight.w700))),
+        ]),
+        const SizedBox(height: 10),
+        for (int k = 0; k < 4; k++) _optionRow(q, i, k),
+      ]),
+    );
+  }
+
+  // ───────────────────────────── theory ─────────────────────────────
+  Widget _theorySection() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [_C.theory.withOpacity(_includeTheory ? 0.14 : 0.07), Colors.white]),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _C.theory.withOpacity(_includeTheory ? 0.55 : 0.3), width: 1.5),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => setState(() => _includeTheory = !_includeTheory),
+          child: Row(children: [
+            Container(width: 50, height: 50, decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFB923C), Color(0xFFEA580C)]), borderRadius: BorderRadius.circular(17), boxShadow: _soft(_C.theory, 0.35)), child: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 28)),
+            const SizedBox(width: 12),
+            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Theory questions', style: TextStyle(fontSize: 18.5, fontWeight: FontWeight.w900)), Text('Essay questions shown after the MCQs', style: TextStyle(fontSize: 13.5, color: _C.muted))])),
+            Switch(value: _includeTheory, onChanged: (v) => setState(() => _includeTheory = v), activeColor: Colors.white, activeTrackColor: _C.theory, inactiveTrackColor: _C.border, inactiveThumbColor: Colors.white),
+          ]),
         ),
         if (_includeTheory) ...[
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.only(bottom: 10),
-            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _C.theory, width: 2))),
-            child: const Row(children: [
-              Icon(Icons.edit, color: _C.theory),
-              SizedBox(width: 8),
-              Text('Theory Questions Section', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _C.theory)),
-            ]),
-          ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(5)),
-            child: const Row(children: [
-              Icon(Icons.info, size: 18, color: Color(0xFF666666)),
-              SizedBox(width: 8),
-              Expanded(child: Text('These questions will appear after the multiple-choice questions in the exam.', style: TextStyle(color: Color(0xFF666666)))),
-            ]),
-          ),
           for (int i = 0; i < _theory.length; i++) _theoryCard(i),
-          const SizedBox(height: 14),
-          _btn('Add Theory Question', Icons.add, _C.theory, _addTheory),
+          _addTile('Add theory question', Icons.add_rounded, _C.theory, _addTheory),
         ],
       ]),
     );
@@ -1265,172 +1596,214 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
 
   Widget _theoryCard(int i) {
     final t = _theory[i];
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: _accentCard(
-        bar: _C.theory,
-        padding: const EdgeInsets.all(14),
-        radius: 8,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text.rich(TextSpan(children: [
-            TextSpan(text: 'Theory Question ${i + 1} ', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _C.theory)),
-            const TextSpan(text: '(Essay/Theory)', style: TextStyle(fontSize: 14, color: Color(0xFF666666))),
-          ])),
-          const SizedBox(height: 10),
-          TextField(
-            controller: t.text,
-            minLines: 4,
-            maxLines: 8,
-            onTap: () => _setActive(t.text, 'Theory Question ${i + 1}'),
-            decoration: _dec('Enter theory question here...'),
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            const Icon(Icons.star, size: 16, color: _C.warning),
-            const SizedBox(width: 6),
-            const Text('Marks:', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 80,
-              child: TextField(
-                controller: t.marks,
-                keyboardType: TextInputType.number,
-                onChanged: (v) {
-                  final n = int.tryParse(v);
-                  if (n != null && n > 20) t.marks.text = '20';
-                },
-                decoration: _dec('5'),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          _btn('Remove', Icons.delete, _C.danger, () => _removeTheory(i)),
+    final n = (int.tryParse(t.marks.text) ?? 5).clamp(1, 20);
+    Widget step(IconData ic, VoidCallback? onTap) => InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(width: 40, height: 40, decoration: BoxDecoration(color: onTap == null ? _C.border : _C.theory.withOpacity(0.14), borderRadius: BorderRadius.circular(14)), child: Icon(ic, color: onTap == null ? _C.hint : _C.theory, size: 22)),
+        );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: _C.theory.withOpacity(0.3), width: 1.4)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          _numBadge('${i + 1}', const LinearGradient(colors: [Color(0xFFFB923C), Color(0xFFEA580C)])),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Theory question', style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.w900))),
+          _iconBtn(Icons.delete_outline_rounded, _C.danger, () => _removeTheory(i)),
         ]),
+        const SizedBox(height: 12),
+        TextField(
+          controller: t.text,
+          minLines: 4,
+          maxLines: 9,
+          onTap: () => _setActive(t.text, 'Theory Question ${i + 1}'),
+          style: const TextStyle(fontSize: 16.5, color: _C.text, height: 1.4, fontWeight: FontWeight.w600),
+          decoration: _dec('Write the essay question here…'),
+        ),
+        const SizedBox(height: 12),
+        Row(children: [
+          const Icon(Icons.star_rounded, color: _C.warning, size: 22),
+          const SizedBox(width: 6),
+          const Text('Marks', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          const Spacer(),
+          step(Icons.remove_rounded, n > 1 ? () => setState(() => t.marks.text = '${n - 1}') : null),
+          Container(width: 54, alignment: Alignment.center, child: Text('$n', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+          step(Icons.add_rounded, n < 20 ? () => setState(() => t.marks.text = '${n + 1}') : null),
+        ]),
+      ]),
+    );
+  }
+
+  // ───────────────────────────── floating dock ─────────────────────────────
+  Widget _dock() {
+    final mcq = _questions.length;
+    final th = _includeTheory ? _theory.length : 0;
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
+          decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), border: const Border(top: BorderSide(color: _C.border, width: 1.2)), boxShadow: [BoxShadow(color: const Color(0xFF312E81).withOpacity(0.12), blurRadius: 30, offset: const Offset(0, -8))]),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: _C.primary.withOpacity(0.10), borderRadius: BorderRadius.circular(12)), child: Text('$mcq MCQ', style: const TextStyle(color: _C.primary, fontWeight: FontWeight.w900, fontSize: 13))),
+              if (th > 0) Container(margin: const EdgeInsets.only(left: 8), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: _C.theory.withOpacity(0.12), borderRadius: BorderRadius.circular(12)), child: Text('$th theory', style: const TextStyle(color: Color(0xFFC2410C), fontWeight: FontWeight.w900, fontSize: 13))),
+              const Spacer(),
+              if (_saving) const Row(children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2.4, color: _C.primary)), SizedBox(width: 8), Text('Saving…', style: TextStyle(fontWeight: FontWeight.w800, color: _C.primary))]),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(flex: 2, child: _ghostBtn(_editSubjectId > 0 ? 'Update draft' : 'Save draft', Icons.save_rounded, _C.draft, _saving ? null : () => _save('draft'), expand: true)),
+              const SizedBox(width: 10),
+              Expanded(flex: 3, child: _btn(_editSubjectId > 0 ? 'Publish update' : 'Publish exam', Icons.rocket_launch_rounded, _C.success, _saving ? null : () => _save('publish'), expand: true)),
+            ]),
+          ]),
+        ),
       ),
     );
   }
 
-  // ───────────────────────────── How It Works ─────────────────────────────
-  Widget _howItWorks() {
-    final steps = <List<String>>[
-      ['Start Free Trial', 'Create up to $_trialLimit subjects for free to test our system.'],
-      ['Choose a Plan', 'Select either Term Plan (3 months) or Session Plan (9 months) based on your needs.'],
-      ['Make Payment', 'Pay securely via Flutterwave using Card, Bank Transfer, USSD, or Mobile Money.'],
-      ['Get Full Access', 'Once verified, create unlimited exams with multiple choice and theory questions.'],
-    ];
-    return _accentCard(
-      bar: _C.info,
-      barWidth: 5,
-      bg: _C.lightBg,
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Icon(Icons.help, color: _C.info),
-          SizedBox(width: 8),
-          Text('How It Works', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-        ]),
-        const SizedBox(height: 8),
-        const Text('Follow these simple steps to get started with the CBT system:'),
-        const SizedBox(height: 14),
-        for (int i = 0; i < steps.length; i++)
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(color: _C.info, shape: BoxShape.circle),
-                child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(steps[i][0], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text(steps[i][1], style: const TextStyle(color: Color(0xFF555555))),
-              ])),
-            ]),
+  Widget _sciFab() => Tooltip(
+        message: 'Scientific tools',
+        child: InkWell(
+          onTap: _openScientific,
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFA855F7), Color(0xFF6D28D9)]), boxShadow: _soft(_C.sci, 0.5)),
+            child: const Icon(Icons.functions_rounded, color: Colors.white, size: 30),
           ),
-        const SizedBox(height: 6),
-        Center(
-          child: Wrap(spacing: 10, runSpacing: 10, alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            _upgradeBtn(_hasFreeTrial ? 'Upgrade Now' : 'Get Started', icon: Icons.rocket_launch),
-            OutlinedButton.icon(onPressed: () => setState(() => _showHow = false), icon: const Icon(Icons.close, size: 18), label: const Text('Close')),
+        ),
+      );
+
+  // ───────────────────────────── how it works (sheet) ─────────────────────────────
+  void _openHow() {
+    final steps = <List<String>>[
+      ['Start free trial', 'Create up to $_trialLimit subjects for free to test the system.'],
+      ['Choose a plan', 'Term plan (3 months) or Session plan (9 months) — pick what fits.'],
+      ['Pay securely', 'Flutterwave: card, bank transfer, USSD or mobile money.'],
+      ['Get full access', 'Once verified, create unlimited exams with MCQ and theory questions.'],
+    ];
+    final icons = [Icons.card_giftcard_rounded, Icons.view_carousel_rounded, Icons.lock_rounded, Icons.rocket_launch_rounded];
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.88),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(34))),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Center(child: Container(width: 46, height: 5, decoration: BoxDecoration(color: _C.border, borderRadius: BorderRadius.circular(3)))),
+            const SizedBox(height: 18),
+            Row(children: [
+              Container(width: 52, height: 52, decoration: BoxDecoration(gradient: _C.ctaGradient, borderRadius: BorderRadius.circular(18)), child: const Icon(Icons.lightbulb_rounded, color: Colors.white, size: 28)),
+              const SizedBox(width: 14),
+              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('How it works', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)), Text('Four quick steps to get going', style: TextStyle(fontSize: 14.5, color: _C.muted))])),
+              IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded)),
+            ]),
+            const SizedBox(height: 20),
+            for (int i = 0; i < steps.length; i++)
+              IntrinsicHeight(
+                child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Column(children: [
+                    Container(width: 46, height: 46, decoration: BoxDecoration(shape: BoxShape.circle, gradient: _C.ctaGradient, boxShadow: _soft(_C.primary, 0.3)), child: Icon(icons[i], color: Colors.white, size: 23)),
+                    if (i < steps.length - 1) Expanded(child: Container(width: 3, margin: const EdgeInsets.symmetric(vertical: 4), decoration: BoxDecoration(color: _C.border, borderRadius: BorderRadius.circular(3)))),
+                  ]),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('${i + 1}. ${steps[i][0]}', style: const TextStyle(fontSize: 17.5, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 3),
+                        Text(steps[i][1], style: const TextStyle(fontSize: 15, color: _C.muted, height: 1.4)),
+                      ]),
+                    ),
+                  ),
+                ]),
+              ),
+            const SizedBox(height: 4),
+            _btn(_hasFreeTrial ? 'Upgrade now' : 'Get started', Icons.rocket_launch_rounded, _C.payment, () {
+              Navigator.pop(ctx);
+              _openPayment();
+            }, expand: true),
           ]),
         ),
-      ]),
+      ),
     );
   }
 
-  // ───────────────────────────── All Subjects ─────────────────────────────
+  // ───────────────────────────── your exams (library) ─────────────────────────────
   Widget _subjectsSection() {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(Icons.list_alt, color: _C.primary),
-        SizedBox(width: 8),
-        Text('All Subjects', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: _C.text)),
+      const SizedBox(height: 30),
+      Row(children: [
+        Container(width: 46, height: 46, decoration: BoxDecoration(gradient: _C.ctaGradient, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.collections_bookmark_rounded, color: Colors.white)),
+        const SizedBox(width: 12),
+        const Expanded(child: Text('Your exams', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, letterSpacing: -0.3))),
+        _pill('$_total'),
       ]),
-      const SizedBox(height: 6),
-      Text('Total Subjects: $_total', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF666666))),
       const SizedBox(height: 14),
       if (_subjects.isNotEmpty && _canCreate)
-        Padding(padding: const EdgeInsets.only(bottom: 14), child: Center(child: _btn('Delete All Subjects', Icons.delete_sweep, _C.danger, _deleteAll))),
+        Align(alignment: Alignment.centerRight, child: _ghostBtn('Delete all', Icons.delete_sweep_rounded, _C.danger, _deleteAll, small: true)),
+      const SizedBox(height: 10),
       if (_loadingSubjects)
-        const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator(color: _C.primary)))
+        const Padding(padding: EdgeInsets.all(34), child: Center(child: CircularProgressIndicator(color: _C.primary)))
       else if (_subjects.isEmpty)
         _emptySubjects()
       else
-        for (int i = 0; i < _subjects.length; i++) Padding(padding: const EdgeInsets.only(bottom: 18), child: _subjectCard(_subjects[i], _firstSn + i)),
+        for (int i = 0; i < _subjects.length; i++) _subjectCard(_subjects[i], _firstSn + i),
       if (_totalPages > 1) _pagination(),
     ]);
   }
 
   Widget _emptySubjects() => Container(
-        padding: const EdgeInsets.all(30),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.fromLTRB(24, 34, 24, 30),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), border: Border.all(color: _C.border, width: 1.4), boxShadow: _soft()),
         child: Column(children: [
-          Icon(Icons.inbox, size: 48, color: Colors.grey.shade400),
-          const SizedBox(height: 12),
-          const Text('No exam subjects found.', style: TextStyle(color: Color(0xFF666666), fontSize: 16)),
-          if (_filtersReady && _canCreate) ...[
-            const SizedBox(height: 6),
-            const Text('Start by creating your first exam using the form above.'),
-          ] else if (!_canCreate) ...[
-            const SizedBox(height: 14),
-            _upgradeBtn(_hasFreeTrial ? 'Upgrade to Create' : 'Subscribe to Create Exams'),
-          ],
+          Container(width: 84, height: 84, decoration: BoxDecoration(shape: BoxShape.circle, color: _C.primary.withOpacity(0.10)), child: const Icon(Icons.inbox_rounded, size: 42, color: _C.primary)),
+          const SizedBox(height: 16),
+          const Text('No exams yet', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(_filtersReady && _canCreate ? 'Write your first exam in the editor above — it will appear here.' : 'Exams you create will show up here.', textAlign: TextAlign.center, style: const TextStyle(fontSize: 15.5, color: _C.muted, height: 1.4)),
+          if (!_canCreate) ...[const SizedBox(height: 16), _upgradeBtn(_hasFreeTrial ? 'Upgrade to create' : 'Subscribe to create exams')],
         ]),
       );
 
-  Widget _statusBadge(bool draft) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: draft ? const Color(0x20FFC107) : const Color(0x2028A745),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: draft ? _C.warning : _C.success),
-        ),
-        child: Text(draft ? 'Draft' : 'Published', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: draft ? const Color(0xFF856404) : const Color(0xFF155724))),
-      );
+  Widget _statusBadge(bool draft) {
+    final c = draft ? _C.warning : _C.success;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(color: c.withOpacity(0.14), borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        const SizedBox(width: 7),
+        Text(draft ? 'Draft' : 'Live', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: draft ? const Color(0xFF92400E) : const Color(0xFF047857))),
+      ]),
+    );
+  }
 
-  Widget _typeBadge(bool theory) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: theory ? const Color(0xFFFFF3E0) : const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(5)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(theory ? Icons.edit_note : Icons.format_list_numbered, size: 16, color: theory ? const Color(0xFFF57C00) : const Color(0xFF1976D2)),
-          const SizedBox(width: 5),
-          Text(theory ? 'MCQ + Theory' : 'MCQ Only', style: TextStyle(fontWeight: FontWeight.w500, color: theory ? const Color(0xFFF57C00) : const Color(0xFF1976D2))),
-        ]),
-      );
+  Widget _typeBadge(bool theory) {
+    final c = theory ? _C.theory : _C.info;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: c.withOpacity(0.11), borderRadius: BorderRadius.circular(12)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(theory ? Icons.edit_note_rounded : Icons.checklist_rounded, size: 17, color: c),
+        const SizedBox(width: 5),
+        Text(theory ? 'MCQ + Theory' : 'MCQ only', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color.lerp(c, Colors.black, 0.25))),
+      ]),
+    );
+  }
 
-  Widget _row(String label, Widget value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 100, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF555555)))),
-          Expanded(child: Align(alignment: Alignment.centerLeft, child: value)),
-        ]),
-      );
+  Widget _miniAction(String label, IconData icon, Color color, VoidCallback onTap) => _ghostBtn(label, icon, color, onTap, small: true);
 
   Widget _subjectCard(Map<String, dynamic> s, int sn) {
     final id = _toInt(s['subject_id']) ?? 0;
@@ -1438,68 +1811,99 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
     final theory = _toInt(s['include_theory']) == 1;
     final tc = _toInt(s['theory_count']) ?? 0;
     final mc = _toInt(s['mcq_count']) ?? 0;
-    return _accentCard(
+    final name = '${s['subject_name']}';
+    final initials = name.trim().isEmpty ? '?' : name.trim().split(RegExp(r'\s+')).take(2).map((e) => e[0].toUpperCase()).join();
+    final tint = draft ? _C.warning : _C.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: _C.border, width: 1.4), boxShadow: _soft()),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _row('S/N', Text('$sn')),
-        _row('Name', Text('${s['subject_name']}', style: const TextStyle(fontWeight: FontWeight.bold))),
-        _row('Session', Text('${s['session_name']}')),
-        _row('Term', Text('${s['term_name']}')),
-        _row('Class', Text('${s['class_name']}')),
-        _row('Questions', Text(tc > 0 ? '${s['question_count']}  ($mc MCQ, $tc Theory)' : '${s['question_count']}')),
-        _row('Status', _statusBadge(draft)),
-        _row('Type', _typeBadge(theory)),
-        const SizedBox(height: 12),
-        _btn('View Questions', Icons.visibility, _C.primary, () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ViewQuestionsScreen(token: _token!, subjectId: id))), expand: true),
-        const SizedBox(height: 8),
-        if (draft) ...[
-          _btn('Edit Draft', Icons.edit, _C.info, () => _editDraft(id), expand: true),
-          const SizedBox(height: 8),
-          _btn('Publish Exam', Icons.check, _C.success, () => _publish(id), expand: true),
-        ] else
-          _btn('Published', Icons.check_circle, _C.success, null, expand: true),
-        const SizedBox(height: 8),
-        _btn('Edit Details', Icons.edit_outlined, _C.info, () => _openEditDetails(s), expand: true),
-        const SizedBox(height: 8),
-        _btn('Delete Subject', Icons.delete, _C.danger, () => _deleteSubject(id), expand: true),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(19), gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [tint, Color.lerp(tint, Colors.black, 0.28)!]), boxShadow: _soft(tint, 0.35)),
+            child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, height: 1.2)),
+              const SizedBox(height: 4),
+              Text('Exam #$sn', style: const TextStyle(fontSize: 13.5, color: _C.muted, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          _statusBadge(draft),
+        ]),
+        const SizedBox(height: 14),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _ctxChip(Icons.calendar_month_rounded, '${s['session_name']}'),
+          _ctxChip(Icons.auto_stories_rounded, '${s['term_name']}'),
+          _ctxChip(Icons.groups_rounded, '${s['class_name']}'),
+        ]),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: _C.field, borderRadius: BorderRadius.circular(20)),
+          child: Row(children: [
+            const Icon(Icons.quiz_rounded, color: _C.primary, size: 24),
+            const SizedBox(width: 10),
+            Expanded(child: Text(tc > 0 ? '${s['question_count']} questions  ·  $mc MCQ, $tc theory' : '${s['question_count']} questions', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
+            _typeBadge(theory),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _miniAction('View', Icons.visibility_rounded, _C.info, () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ViewQuestionsScreen(token: _token!, subjectId: id)))),
+          if (draft) _miniAction('Edit', Icons.edit_rounded, _C.primary, () => _editDraft(id)),
+          if (draft) _miniAction('Publish', Icons.rocket_launch_rounded, _C.success, () => _publish(id)),
+          _miniAction('Details', Icons.tune_rounded, _C.sci, () => _openEditDetails(s)),
+          _miniAction('Delete', Icons.delete_outline_rounded, _C.danger, () => _deleteSubject(id)),
+        ]),
       ]),
     );
   }
 
   Widget _pagination() {
-    Widget chip(String label, VoidCallback? onTap, {bool current = false, IconData? lead, IconData? trail}) => InkWell(
+    Widget circle(IconData i, VoidCallback onTap) => InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(5),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(
-              color: current ? _C.primary : Colors.white,
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(color: current ? _C.primary : _C.border),
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              if (lead != null) Icon(lead, size: 14, color: _C.primary),
-              Text(label, style: TextStyle(color: current ? Colors.white : _C.primary, fontWeight: FontWeight.w600)),
-              if (trail != null) Icon(trail, size: 14, color: _C.primary),
-            ]),
-          ),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(width: 46, height: 46, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _C.border, width: 1.4)), child: Icon(i, color: _C.primary)),
         );
+    Widget num(int p) {
+      final cur = p == _page;
+      return InkWell(
+        onTap: cur ? null : () => _loadSubjects(page: p),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 46,
+          height: 46,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(gradient: cur ? _C.ctaGradient : null, color: cur ? null : Colors.white, borderRadius: BorderRadius.circular(16), border: cur ? null : Border.all(color: _C.border, width: 1.4), boxShadow: cur ? _soft(_C.primary, 0.35) : null),
+          child: Text('$p', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cur ? Colors.white : _C.text)),
+        ),
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Wrap(alignment: WrapAlignment.center, spacing: 6, runSpacing: 6, children: [
-        if (_page > 1) chip(' Previous', () => _loadSubjects(page: _page - 1), lead: Icons.chevron_left),
-        for (int p = 1; p <= _totalPages; p++) chip('$p', p == _page ? null : () => _loadSubjects(page: p), current: p == _page),
-        if (_page < _totalPages) chip('Next ', () => _loadSubjects(page: _page + 1), trail: Icons.chevron_right),
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+        if (_page > 1) circle(Icons.chevron_left_rounded, () => _loadSubjects(page: _page - 1)),
+        for (int p = 1; p <= _totalPages; p++) num(p),
+        if (_page < _totalPages) circle(Icons.chevron_right_rounded, () => _loadSubjects(page: _page + 1)),
       ]),
     );
   }
 
-  // ───────────────────────────── Edit Details modal ─────────────────────────────
+  // ───────────────────────────── edit details (sheet) ─────────────────────────────
   void _openEditDetails(Map<String, dynamic> s) {
     final nameCtrl = TextEditingController(text: '${s['subject_name']}');
     int? sid = _toInt(s['session_id']), tid = _toInt(s['term_id']), cid = _toInt(s['class_id']);
     bool busy = false;
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1507,58 +1911,59 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
         builder: (ctx, setM) => Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
           child: Container(
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.92),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(34))),
             child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(22, 16, 8, 16),
-                  decoration: const BoxDecoration(gradient: _C.headerGradient, borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-                  child: Row(children: [
-                    const Icon(Icons.edit, color: Colors.white),
-                    const SizedBox(width: 8),
-                    const Expanded(child: Text('Edit Exam Details', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
-                    IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white)),
-                  ]),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 22),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _label(Icons.menu_book, 'Subject Name'),
-                    TextField(controller: nameCtrl, decoration: _dec('Enter subject name')),
-                    _dd('Session', Icons.calendar_month, sid, '-- Select Session --', _sessions, 'id', 'session_name', (v) => setM(() => sid = v)),
-                    _dd('Term', Icons.menu_book, tid, '-- Select Term --', _terms, 'id', 'term_name', (v) => setM(() => tid = v)),
-                    _dd('Class', Icons.groups, cid, '-- Select Class --', _classes, 'class_id', 'class_name', (v) => setM(() => cid = v)),
-                    const SizedBox(height: 20),
-                    Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                      _btn('Cancel', Icons.close, _C.draft, () => Navigator.pop(ctx)),
-                      const SizedBox(width: 10),
-                      _btn(busy ? 'Saving...' : 'Update Details', Icons.save, _C.primary, busy
-                          ? null
-                          : () async {
-                              if (nameCtrl.text.trim().isEmpty) {
-                                _toast('Subject name is required.', error: true);
-                                return;
-                              }
-                              setM(() => busy = true);
-                              final r = await _Api.post(_token!, 'update_exam', {
-                                'subject_id': '${s['subject_id']}',
-                                'subject_name': nameCtrl.text.trim(),
-                                'session_id': '${sid ?? ''}',
-                                'term_id': '${tid ?? ''}',
-                                'class_id': '${cid ?? ''}',
-                              });
-                              if (r['success'] == true) {
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                _setBanner('${r['message']}');
-                                await _loadSubjects();
-                              } else {
-                                if (ctx.mounted) setM(() => busy = false);
-                                _toast('${r['message']}', error: true);
-                              }
-                            }),
-                    ]),
-                  ]),
-                ),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Center(child: Container(width: 46, height: 5, decoration: BoxDecoration(color: _C.border, borderRadius: BorderRadius.circular(3)))),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Container(width: 50, height: 50, decoration: BoxDecoration(gradient: _C.ctaGradient, borderRadius: BorderRadius.circular(17)), child: const Icon(Icons.tune_rounded, color: Colors.white)),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('Edit exam details', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded)),
+                ]),
+                const SizedBox(height: 14),
+                TextField(controller: nameCtrl, style: const TextStyle(fontSize: 17.5, fontWeight: FontWeight.w800), decoration: _dec('Enter subject name', icon: Icons.menu_book_rounded, label: 'Subject name')),
+                const SizedBox(height: 12),
+                _pickTile(Icons.calendar_month_rounded, 'Session', sid, _sessions, 'id', 'session_name', (v) => setM(() => sid = v), _C.primary),
+                const SizedBox(height: 10),
+                _pickTile(Icons.auto_stories_rounded, 'Term', tid, _terms, 'id', 'term_name', (v) => setM(() => tid = v), _C.sci),
+                const SizedBox(height: 10),
+                _pickTile(Icons.groups_rounded, 'Class', cid, _classes, 'class_id', 'class_name', (v) => setM(() => cid = v), _C.info),
+                const SizedBox(height: 20),
+                Row(children: [
+                  Expanded(child: _ghostBtn('Cancel', Icons.close_rounded, _C.draft, () => Navigator.pop(ctx), expand: true)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: _btn(busy ? 'Saving…' : 'Update details', Icons.save_rounded, _C.primary, busy
+                        ? null
+                        : () async {
+                            if (nameCtrl.text.trim().isEmpty) {
+                              _toast('Subject name is required.', error: true);
+                              return;
+                            }
+                            setM(() => busy = true);
+                            final r = await _Api.post(_token!, 'update_exam', {
+                              'subject_id': '${s['subject_id']}',
+                              'subject_name': nameCtrl.text.trim(),
+                              'session_id': '${sid ?? ''}',
+                              'term_id': '${tid ?? ''}',
+                              'class_id': '${cid ?? ''}',
+                            });
+                            if (r['success'] == true) {
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              _setBanner('${r['message']}');
+                              await _loadSubjects();
+                            } else {
+                              if (ctx.mounted) setM(() => busy = false);
+                              _toast('${r['message']}', error: true);
+                            }
+                          }, expand: true),
+                  ),
+                ]),
               ]),
             ),
           ),
@@ -1566,6 +1971,7 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
       ),
     );
   }
+
 
   // ───────────────────────────── Scientific Tools ─────────────────────────────
   void _insertText(String symbol) {
@@ -1616,6 +2022,10 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+          titleTextStyle: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: _C.text),
           title: const Text('Insert Fraction'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: n, decoration: _dec('Numerator')),
@@ -1626,7 +2036,7 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _C.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: _C.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), textStyle: const TextStyle(fontWeight: FontWeight.w800)),
               onPressed: () {
                 if (n.text.isEmpty || d.text.isEmpty) {
                   setD(() => err = 'Both numerator and denominator are required');
@@ -1650,6 +2060,10 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+          titleTextStyle: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: _C.text),
           title: const Text('Equation Editor'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: eq, minLines: 4, maxLines: 6, decoration: _dec('Enter your equation here...')),
@@ -1667,7 +2081,7 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _C.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: _C.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), textStyle: const TextStyle(fontWeight: FontWeight.w800)),
               onPressed: () {
                 if (eq.text.isEmpty) {
                   setD(() => err = 'Please enter an equation');
@@ -1691,6 +2105,10 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+          titleTextStyle: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: _C.text),
           title: const Text('Matrix Editor'),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Enter matrix dimensions:'),
@@ -1703,7 +2121,7 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _C.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: _C.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), textStyle: const TextStyle(fontWeight: FontWeight.w800)),
               onPressed: () {
                 final rr = int.tryParse(r.text), cc = int.tryParse(c.text);
                 if (rr == null || cc == null || rr < 1 || rr > 5 || cc < 1 || cc > 5) {
@@ -1743,21 +2161,21 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
     String plan = '', ref = '';
     bool busy = false;
 
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setM) {
-        Widget feat(String t) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
+        Widget feat(String t, bool on) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.check_circle, size: 16, color: _C.success),
-                const SizedBox(width: 8),
-                Expanded(child: Text(t)),
+                Container(width: 22, height: 22, decoration: BoxDecoration(color: _C.success.withOpacity(0.14), shape: BoxShape.circle), child: const Icon(Icons.check_rounded, size: 15, color: _C.success)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(t, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: on ? _C.text : _C.muted))),
               ]),
             );
 
-        Widget planCard(String key, String title, int price, String duration, List<String> feats) {
+        Widget planCard(String key, String title, int price, String duration, List<String> feats, {String? ribbon, required IconData icon}) {
           final sel = plan == key;
           return GestureDetector(
             onTap: () => setM(() {
@@ -1765,167 +2183,142 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
               ref = 'CBT-${DateTime.now().millisecondsSinceEpoch}-$pid';
             }),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: double.infinity,
+              duration: const Duration(milliseconds: 220),
               margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(20),
-              transform: Matrix4.translationValues(0, sel ? -3 : 0, 0),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: sel ? const Color(0xFFF0F9FF) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: sel ? _C.primary : const Color(0xFFDDDDDD), width: 2),
-                boxShadow: sel ? [BoxShadow(color: _C.primary.withAlpha(51), blurRadius: 20, offset: const Offset(0, 10))] : null,
+                gradient: sel ? LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [_C.primary.withOpacity(0.12), Colors.white]) : null,
+                color: sel ? null : Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: sel ? _C.primary : _C.border, width: sel ? 2.4 : 1.4),
+                boxShadow: sel ? _soft(_C.primary, 0.25) : null,
               ),
-              child: Column(children: [
-                Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-                Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(_naira(price), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: _C.primary))),
-                Text(duration, style: const TextStyle(color: Color(0xFF666666))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Container(width: 48, height: 48, decoration: BoxDecoration(gradient: sel ? _C.ctaGradient : null, color: sel ? null : _C.field, borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: sel ? Colors.white : _C.primary, size: 25)),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), Text(duration, style: const TextStyle(fontSize: 13.5, color: _C.muted))])),
+                  if (ribbon != null) Container(margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFEF4444)]), borderRadius: BorderRadius.circular(12)), child: Text(ribbon, style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w900))),
+                  Icon(sel ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded, color: sel ? _C.primary : _C.hint, size: 27),
+                ]),
                 const SizedBox(height: 12),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: feats.map(feat).toList()),
+                Text(_naira(price), style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: _C.primary, letterSpacing: -0.5)),
+                const SizedBox(height: 8),
+                for (final f in feats) feat(f, true),
               ]),
             ),
           );
         }
 
         Widget kv(String k, Widget v) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 7),
               child: Row(children: [
-                Expanded(flex: 4, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF555555)))),
+                Expanded(flex: 4, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w700, color: _C.muted, fontSize: 14.5))),
                 Expanded(flex: 5, child: Align(alignment: Alignment.centerRight, child: v)),
               ]),
             );
 
         final amount = plan == 'term' ? termPrice : sessionPrice;
         return Container(
-          height: MediaQuery.of(ctx).size.height * .93,
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          height: MediaQuery.of(ctx).size.height * 0.94,
+          decoration: const BoxDecoration(color: Color(0xFFF8F8FF), borderRadius: BorderRadius.vertical(top: Radius.circular(34))),
           child: Column(children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 8, 0),
-              child: Row(children: [
-                const Icon(Icons.workspace_premium, color: _C.payment),
-                const SizedBox(width: 8),
-                const Expanded(child: Text('CBT Subscription Plans', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold))),
-                IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
-              ]),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(22, 14, 10, 22),
+                decoration: const BoxDecoration(gradient: _C.heroGradient),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: Center(child: Container(width: 46, height: 5, decoration: BoxDecoration(color: Colors.white.withOpacity(0.4), borderRadius: BorderRadius.circular(3))))),
+                    IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: Colors.white)),
+                  ]),
+                  Row(children: [
+                    _glass(radius: 20, padding: const EdgeInsets.all(12), child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 30)),
+                    const SizedBox(width: 14),
+                    const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Choose your plan', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)), SizedBox(height: 2), Text('Unlock the full CBT system', style: TextStyle(color: Colors.white70, fontSize: 15))])),
+                  ]),
+                ]),
+              ),
             ),
             Expanded(
-              child: ListView(padding: const EdgeInsets.fromLTRB(20, 4, 20, 30), children: [
-                const Text('Choose a plan to unlock full CBT system access', style: TextStyle(color: Color(0xFF666666))),
-                const SizedBox(height: 16),
-                planCard('term', 'Term Plan', termPrice, 'Valid for 3 months (One Term)', [
-                  'Unlimited Exam Subjects', 'Unlimited Questions', 'MCQ & Theory Questions', '24/7 Support', 'All Features Included',
-                ]),
-                planCard('session', 'Session Plan', sessionPrice, 'Valid for 9 months (Full Session)', [
-                  'Everything in Term Plan', 'Save ${_naira(saving)} (Bulk Discount)', 'Priority Support', 'Early Access to New Features', 'One-time Setup',
-                ]),
-                if (plan.isNotEmpty)
+              child: ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 34), children: [
+                planCard('term', 'Term plan', termPrice, 'Valid for 3 months (one term)', ['Unlimited exam subjects', 'Unlimited questions', 'MCQ & theory questions', '24/7 support', 'All features included'], icon: Icons.event_available_rounded),
+                planCard('session', 'Session plan', sessionPrice, 'Valid for 9 months (full session)', ['Everything in Term plan', 'Save ${_naira(saving)} (bulk discount)', 'Priority support', 'Early access to new features', 'One-time setup'], ribbon: 'BEST VALUE', icon: Icons.workspace_premium_rounded),
+                if (plan.isNotEmpty) ...[
+                  const SizedBox(height: 4),
                   Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: _C.lightBg, borderRadius: BorderRadius.circular(12)),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Row(children: [Icon(Icons.credit_card, color: _C.primary), SizedBox(width: 8), Text('Secure Online Payment', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold))]),
-                      const SizedBox(height: 14),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: const Color(0xFFF0F9FF), borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.primary, width: 2)),
-                        child: const Column(children: [
-                          Icon(Icons.credit_card, color: _C.primary, size: 30),
-                          SizedBox(height: 4),
-                          Text('Flutterwave', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text('Card, Bank Transfer, USSD, etc.', style: TextStyle(color: Color(0xFF666666))),
-                          SizedBox(height: 6),
-                          Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.lock, size: 13, color: _C.success), SizedBox(width: 4), Text('Secure & Encrypted', style: TextStyle(fontSize: 12))]),
-                        ]),
-                      ),
-                      const SizedBox(height: 16),
-                      const Row(children: [Icon(Icons.info, size: 18, color: _C.info), SizedBox(width: 6), Text('Payment Details', style: TextStyle(fontWeight: FontWeight.bold))]),
-                      const Divider(),
-                      kv('Plan Selected:', Text(plan == 'term' ? 'Term Plan (3 Months)' : 'Session Plan (9 Months)', textAlign: TextAlign.right)),
-                      kv('Amount to Pay:', Text(_naira(amount), style: const TextStyle(color: Color(0xFFD32F2F), fontWeight: FontWeight.bold))),
-                      kv('Payment Reference:', Text(ref, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: _C.border, width: 1.4), boxShadow: _soft()),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Row(children: [
+                        Container(width: 44, height: 44, decoration: BoxDecoration(color: _C.payment.withOpacity(0.12), borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.lock_rounded, color: _C.payment)),
+                        const SizedBox(width: 12),
+                        const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Secure checkout', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), Text('Powered by Flutterwave', style: TextStyle(fontSize: 13.5, color: _C.muted))])),
+                      ]),
                       const SizedBox(height: 14),
                       Container(
                         padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                        child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [Icon(Icons.info, size: 17, color: _C.info), SizedBox(width: 6), Expanded(child: Text('Secure Payment via Flutterwave', style: TextStyle(fontWeight: FontWeight.bold)))]),
-                          SizedBox(height: 8),
-                          Text("You will be redirected to Flutterwave's secure payment page where you can choose your preferred payment method:"),
-                          SizedBox(height: 6),
-                          Text('•  Credit/Debit Cards (Visa, Mastercard, Verve)'),
-                          Text('•  Bank Transfers'),
-                          Text('•  USSD (*966* Amount#)'),
-                          Text('•  Mobile Money'),
-                          Text('•  QR Payments'),
-                          SizedBox(height: 8),
-                          Row(children: [Icon(Icons.check_circle, size: 15, color: Color(0xFF27AE60)), SizedBox(width: 6), Expanded(child: Text('All payments are secured and encrypted with 256-bit SSL', style: TextStyle(fontSize: 13)))]),
-                          Row(children: [Icon(Icons.shield, size: 15, color: Color(0xFF27AE60)), SizedBox(width: 6), Expanded(child: Text('PCI DSS compliant payment processing', style: TextStyle(fontSize: 13)))]),
-                        ]),
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: busy
-                              ? null
-                              : () async {
-                                  setM(() => busy = true);
-                                  final r = await _Api.post(_token!, 'init_payment', {'plan_type': plan, 'reference': ref});
-                                  if (r['success'] == true) {
-                                    final url = '${r['data']['payment_url']}';
-                                    if (!mounted) return;
-                                    setState(() => _pendingRef = '${r['data']['reference']}');
-                                    if (ctx.mounted) Navigator.pop(ctx);
-                                    final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                                    if (!ok) _toast('Could not open the payment page.', error: true);
-                                  } else {
-                                    if (ctx.mounted) setM(() => busy = false);
-                                    _toast('${r['message']}', error: true);
-                                  }
-                                },
-                          icon: busy
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Icon(Icons.credit_card),
-                          label: Text(busy ? 'PLEASE WAIT...' : 'PROCEED TO SECURE PAYMENT', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _C.payment,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: _C.field, borderRadius: BorderRadius.circular(20)),
                         child: Column(children: [
-                          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.headset_mic, size: 16), SizedBox(width: 6), Text('Need help with payment? Contact support:')]),
-                          const SizedBox(height: 6),
-                          Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.email, size: 14), const SizedBox(width: 6), Text('${_status['contact_email'] ?? ''}')]),
-                          Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.phone, size: 14), const SizedBox(width: 6), Text('${_status['contact_phone'] ?? ''}')]),
+                          kv('Plan', Text(plan == 'term' ? 'Term · 3 months' : 'Session · 9 months', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15))),
+                          const Divider(height: 1),
+                          kv('Amount', Text(_naira(amount), style: const TextStyle(color: _C.danger, fontWeight: FontWeight.w900, fontSize: 19))),
+                          const Divider(height: 1),
+                          kv('Reference', Text(ref, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.w700))),
                         ]),
                       ),
                       const SizedBox(height: 14),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFFFEAA7))),
-                        child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [Icon(Icons.schedule, size: 18, color: Color(0xFF856404)), SizedBox(width: 8), Text('What Happens Next?', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF856404)))]),
-                          SizedBox(height: 8),
-                          Text('1. Tap "Proceed to Secure Payment"\n2. Complete payment on Flutterwave\'s secure page\n3. Return to this app for automatic verification\n4. Start creating unlimited exams immediately!', style: TextStyle(color: Color(0xFF856404), fontSize: 14, height: 1.5)),
-                        ]),
-                      ),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        for (final m in [('Cards', Icons.credit_card_rounded), ('Bank transfer', Icons.account_balance_rounded), ('USSD', Icons.dialpad_rounded), ('Mobile money', Icons.phone_android_rounded), ('QR', Icons.qr_code_2_rounded)])
+                          Container(padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8), decoration: BoxDecoration(color: _C.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(14)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(m.$2, size: 17, color: _C.primary), const SizedBox(width: 6), Text(m.$1, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))])),
+                      ]),
+                      const SizedBox(height: 16),
+                      _btn(busy ? 'Please wait…' : 'Pay ${_naira(amount)} securely', Icons.lock_rounded, _C.payment, busy
+                          ? null
+                          : () async {
+                              setM(() => busy = true);
+                              final r = await _Api.post(_token!, 'init_payment', {'plan_type': plan, 'reference': ref});
+                              if (r['success'] == true) {
+                                final url = '${r['data']['payment_url']}';
+                                if (!mounted) return;
+                                setState(() => _pendingRef = '${r['data']['reference']}');
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                if (!ok) _toast('Could not open the payment page.', error: true);
+                              } else {
+                                if (ctx.mounted) setM(() => busy = false);
+                                _toast('${r['message']}', error: true);
+                              }
+                            }, expand: true),
+                      const SizedBox(height: 14),
+                      const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.verified_user_rounded, size: 17, color: _C.success), SizedBox(width: 6), Flexible(child: Text('256-bit SSL encryption · PCI DSS compliant', style: TextStyle(fontSize: 13, color: _C.muted, fontWeight: FontWeight.w700)))]),
                     ]),
                   ),
-                const SizedBox(height: 18),
-                const Divider(),
-                const Center(child: Text('🔒 Payments secured by Flutterwave | PCI DSS Compliant', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF666666), fontSize: 13))),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: _C.warning.withOpacity(0.11), borderRadius: BorderRadius.circular(24), border: Border.all(color: _C.warning.withOpacity(0.4))),
+                    child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [Icon(Icons.route_rounded, color: Color(0xFF92400E), size: 21), SizedBox(width: 8), Text('What happens next', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF92400E)))]),
+                      SizedBox(height: 8),
+                      Text('1. Tap “Pay securely”\n2. Complete payment on Flutterwave\n3. Come back to this app — it verifies automatically\n4. Start creating unlimited exams!', style: TextStyle(color: Color(0xFF78350F), fontSize: 14.5, height: 1.6)),
+                    ]),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: _C.border)),
+                    child: Column(children: [
+                      const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.headset_mic_rounded, size: 19, color: _C.primary), SizedBox(width: 7), Text('Need help with payment?', style: TextStyle(fontWeight: FontWeight.w900))]),
+                      const SizedBox(height: 8),
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.email_rounded, size: 16, color: _C.muted), const SizedBox(width: 6), Flexible(child: Text('${_status['contact_email'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w700)))]),
+                      const SizedBox(height: 4),
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.phone_rounded, size: 16, color: _C.muted), const SizedBox(width: 6), Text('${_status['contact_phone'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w700))]),
+                    ]),
+                  ),
+                ],
               ]),
             ),
           ]),
@@ -1933,6 +2326,7 @@ class _FlutterAddExamScreenState extends State<FlutterAddExamScreen> with Widget
       }),
     );
   }
+
 
   Future<void> _verifyPayment({bool silent = false}) async {
     final ref = _pendingRef;
@@ -1959,16 +2353,18 @@ class _Dashed extends StatelessWidget {
   final Widget child;
   final Color color;
   final Color background;
-  const _Dashed({required this.child, required this.color, required this.background});
+  final double radius;
+  final EdgeInsets padding;
+  const _Dashed({required this.child, required this.color, required this.background, this.radius = 8, this.padding = const EdgeInsets.all(18)});
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      foregroundPainter: _DashedPainter(color),
+      foregroundPainter: _DashedPainter(color, radius),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
+        padding: padding,
+        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(radius)),
         child: child,
       ),
     );
@@ -1977,26 +2373,27 @@ class _Dashed extends StatelessWidget {
 
 class _DashedPainter extends CustomPainter {
   final Color color;
-  _DashedPainter(this.color);
+  final double radius;
+  _DashedPainter(this.color, this.radius);
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color
+      ..color = color.withOpacity(0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(8)));
+    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)));
     for (final m in path.computeMetrics()) {
       double d = 0;
       while (d < m.length) {
-        canvas.drawPath(m.extractPath(d, d + 7), paint);
-        d += 11;
+        canvas.drawPath(m.extractPath(d, d + 8), paint);
+        d += 13;
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DashedPainter old) => old.color != color;
+  bool shouldRepaint(covariant _DashedPainter old) => old.color != color || old.radius != radius;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2058,108 +2455,123 @@ class _SciSheet extends StatefulWidget {
 
 class _SciSheetState extends State<_SciSheet> {
   String _tab = 'Math';
+  static const _tabIcons = <String, IconData>{
+    'Math': Icons.calculate_rounded,
+    'Fractions': Icons.percent_rounded,
+    'Greek': Icons.translate_rounded,
+    'Logic': Icons.account_tree_rounded,
+    'Chemistry': Icons.science_rounded,
+    'Physics': Icons.bolt_rounded,
+    'Advanced': Icons.auto_awesome_rounded,
+  };
 
-  Widget _tool(String label, VoidCallback onTap, {double? width, IconData? icon}) => SizedBox(
-        width: width,
+  Widget _tool(String label, VoidCallback onTap, {double? width, IconData? icon}) {
+    final glyph = label.length <= 3 && icon == null;
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(18),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 50),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            constraints: BoxConstraints(minHeight: glyph ? 62 : 56),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFDDDDDD)),
-              boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 4, offset: const Offset(0, 2))],
-            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: _C.border, width: 1.4), boxShadow: _soft(_C.sci, 0.06)),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
-              if (icon != null) ...[Icon(icon, size: 18, color: _C.sci), const SizedBox(width: 6)],
-              Flexible(child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: _C.text))),
+              if (icon != null) ...[Icon(icon, size: 21, color: _C.sci), const SizedBox(width: 9)],
+              Flexible(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: glyph ? 25 : 15.5, fontWeight: glyph ? FontWeight.w700 : FontWeight.w800, color: _C.text))),
             ]),
           ),
         ),
-      );
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final tools = _sciData[_tab]!;
     return Container(
-      height: MediaQuery.of(context).size.height * .82,
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(15))),
+      height: MediaQuery.of(context).size.height * 0.84,
+      decoration: const BoxDecoration(color: Color(0xFFF8F8FF), borderRadius: BorderRadius.vertical(top: Radius.circular(34))),
       child: Column(children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(22, 14, 8, 14),
-          decoration: const BoxDecoration(gradient: _C.headerGradient, borderRadius: BorderRadius.vertical(top: Radius.circular(15))),
+        const SizedBox(height: 10),
+        Container(width: 46, height: 5, decoration: BoxDecoration(color: _C.border, borderRadius: BorderRadius.circular(3))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 10, 8),
           child: Row(children: [
-            const Icon(Icons.science, color: Colors.white),
-            const SizedBox(width: 8),
-            const Expanded(child: Text('Scientific Tools', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
-            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: Colors.white)),
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(17), gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFA855F7), Color(0xFF6D28D9)]), boxShadow: _soft(_C.sci, 0.4)),
+              child: const Icon(Icons.functions_rounded, color: Colors.white, size: 28),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Scientific tools', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                Text('Inserting into: ${widget.fieldLabel.isEmpty ? 'field' : widget.fieldLabel}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, color: _C.muted, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
           ]),
         ),
         SizedBox(
-          height: 52,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            children: [
-              for (final t in _sciData.keys)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: InkWell(
-                    onTap: () => setState(() => _tab = t),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _tab == t ? _C.primary : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _tab == t ? _C.primary : const Color(0xFFDDDDDD)),
-                      ),
-                      child: Text(t, style: TextStyle(fontWeight: FontWeight.w600, color: _tab == t ? Colors.white : _C.text)),
-                    ),
+          height: 56,
+          child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), children: [
+            for (final t in _sciData.keys)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: InkWell(
+                  onTap: () => setState(() => _tab = t),
+                  borderRadius: BorderRadius.circular(18),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(gradient: _tab == t ? _C.ctaGradient : null, color: _tab == t ? null : Colors.white, borderRadius: BorderRadius.circular(18), border: _tab == t ? null : Border.all(color: _C.border, width: 1.4)),
+                    child: Row(children: [
+                      Icon(_tabIcons[t] ?? Icons.category_rounded, size: 18, color: _tab == t ? Colors.white : _C.primary),
+                      const SizedBox(width: 7),
+                      Text(t, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: _tab == t ? Colors.white : _C.text)),
+                    ]),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ]),
         ),
         Expanded(
           child: LayoutBuilder(builder: (context, c) {
             final w = c.maxWidth - 32;
-            final third = (w - 16) / 3;
+            final quarter = (w - 30) / 4;
+            final half = (w - 10) / 2;
             return SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Wrap(spacing: 8, runSpacing: 8, children: [
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+              child: Wrap(spacing: 10, runSpacing: 10, children: [
                 if (_tab == 'Fractions') ...[
-                  for (final t in tools) _tool(t.label, () => widget.onInsert(t.insert), width: third),
-                  _tool('a/b (Custom)', widget.onFraction, width: w),
+                  for (final t in tools) _tool(t.label, () => widget.onInsert(t.insert), width: quarter),
+                  _tool('a/b  Custom fraction', widget.onFraction, width: w, icon: Icons.percent_rounded),
                 ] else if (_tab == 'Advanced') ...[
-                  _tool('Equation Editor', widget.onEquation, width: w, icon: Icons.functions),
-                  _tool('Matrix Editor', widget.onMatrix, width: w, icon: Icons.grid_on),
-                  _tool('Custom Fraction', widget.onFraction, width: w, icon: Icons.percent),
-                  for (final t in tools) _tool(t.label, () => widget.onInsert(t.insert), width: t.label.length > 2 ? (w - 8) / 2 : third),
+                  _tool('Equation editor', widget.onEquation, width: w, icon: Icons.functions_rounded),
+                  _tool('Matrix editor', widget.onMatrix, width: w, icon: Icons.grid_on_rounded),
+                  _tool('Custom fraction', widget.onFraction, width: w, icon: Icons.percent_rounded),
+                  for (final t in tools) _tool(t.label, () => widget.onInsert(t.insert), width: t.label.length > 2 ? half : quarter),
                 ] else
-                  for (final t in tools) _tool(t.label, () => widget.onInsert(t.insert), width: third),
+                  for (final t in tools) _tool(t.label, () => widget.onInsert(t.insert), width: t.label.length <= 3 ? quarter : half),
               ]),
             );
           }),
         ),
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-          decoration: const BoxDecoration(color: _C.lightBg, border: Border(top: BorderSide(color: _C.border))),
+          padding: EdgeInsets.fromLTRB(16, 10, 16, 12 + MediaQuery.of(context).padding.bottom),
+          decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: _C.border))),
           child: Row(children: [
-            const Icon(Icons.check_circle, size: 17, color: _C.success),
-            const SizedBox(width: 6),
-            Expanded(child: Text('Selected: ${widget.fieldLabel.isEmpty ? 'Field' : widget.fieldLabel}', maxLines: 1, overflow: TextOverflow.ellipsis)),
+            const Icon(Icons.touch_app_rounded, size: 20, color: _C.sci),
             const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: _C.draft, foregroundColor: Colors.white),
-              child: const Text('Close'),
-            ),
+            const Expanded(child: Text('Tap a symbol to insert it', style: TextStyle(fontWeight: FontWeight.w700, color: _C.muted))),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
           ]),
         ),
       ]),
@@ -2168,8 +2580,9 @@ class _SciSheetState extends State<_SciSheet> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  VIEW QUESTIONS (opened by "View Questions" on a subject card)
+//  VIEW QUESTIONS (opened by "View" on an exam card)
 // ════════════════════════════════════════════════════════════════════════════
+
 class _ViewQuestionsScreen extends StatefulWidget {
   final String token;
   final int subjectId;
@@ -2220,104 +2633,116 @@ class _ViewQuestionsScreenState extends State<_ViewQuestionsScreen> {
   @override
   Widget build(BuildContext context) {
     final qs = _maps(_data['questions']);
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F6F9),
-      appBar: AppBar(
-        elevation: 0,
-        foregroundColor: Colors.white,
-        flexibleSpace: Container(decoration: const BoxDecoration(gradient: _C.headerGradient)),
-        title: Text(_data['subject_name'] == null ? 'View Questions' : '${_data['subject_name']}', style: const TextStyle(fontWeight: FontWeight.w800)),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _C.primary))
-          : _error != null
-              ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center)))
-              : ListView(padding: const EdgeInsets.all(14), children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-                    child: Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                      Text('${qs.length} question${qs.length == 1 ? '' : 's'}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _toInt(_data['is_draft']) == 1 ? const Color(0x20FFC107) : const Color(0x2028A745),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _toInt(_data['is_draft']) == 1 ? _C.warning : _C.success),
-                        ),
-                        child: Text(_toInt(_data['is_draft']) == 1 ? 'Draft' : 'Published',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: _toInt(_data['is_draft']) == 1 ? const Color(0xFF856404) : const Color(0xFF155724))),
-                      ),
-                    ]),
+    final draft = _toInt(_data['is_draft']) == 1;
+    final mcq = qs.where((q) => q['type'] != 'theory').length;
+    final th = qs.length - mcq;
+    return Theme(
+      data: _lightTheme(),
+      child: Scaffold(
+        backgroundColor: _C.lightBg,
+        body: Stack(children: [
+          const Positioned.fill(child: _AuroraBackdrop()),
+          ListView(padding: EdgeInsets.zero, children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(34)),
+              child: Container(
+                decoration: const BoxDecoration(gradient: _C.heroGradient),
+                padding: EdgeInsets.fromLTRB(18, MediaQuery.of(context).padding.top + 10, 18, 22),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  InkWell(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    borderRadius: BorderRadius.circular(22),
+                    child: _glass(radius: 22, padding: const EdgeInsets.all(11), opacity: 0.16, child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22)),
                   ),
+                  const SizedBox(height: 16),
+                  Text(_data['subject_name'] == null ? 'Questions' : '${_data['subject_name']}', style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, height: 1.1)),
                   const SizedBox(height: 14),
-                  for (int i = 0; i < qs.length; i++) _qCard(i, qs[i]),
+                  if (!_loading && _error == null)
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      _vChip(Icons.quiz_rounded, '${qs.length} question${qs.length == 1 ? '' : 's'}'),
+                      _vChip(Icons.checklist_rounded, '$mcq MCQ'),
+                      if (th > 0) _vChip(Icons.edit_note_rounded, '$th theory'),
+                      _vChip(draft ? Icons.edit_rounded : Icons.bolt_rounded, draft ? 'Draft' : 'Live'),
+                    ]),
                 ]),
+              ),
+            ),
+            if (_loading)
+              const Padding(padding: EdgeInsets.all(60), child: Center(child: CircularProgressIndicator(color: _C.primary)))
+            else if (_error != null)
+              Padding(padding: const EdgeInsets.all(28), child: Center(child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: _C.danger, fontWeight: FontWeight.w700))))
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 40),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (int i = 0; i < qs.length; i++) _qCard(i, qs[i])]),
+              ),
+          ]),
+        ]),
+      ),
     );
   }
+
+  Widget _vChip(IconData i, String t) => _glass(
+        radius: 16,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 16, color: Colors.white), const SizedBox(width: 6), Text(t, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.5))]),
+      );
 
   Widget _qCard(int i, Map<String, dynamic> q) {
     final theory = q['type'] == 'theory';
     final options = (q['options'] as List?) ?? [];
     final correct = _toInt(q['correct']) ?? 0;
+    final accent = theory ? _C.theory : _C.primary;
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Container(width: 4, color: theory ? _C.theory : _C.primary),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Text('Question ${i + 1}', style: TextStyle(fontWeight: FontWeight.bold, color: theory ? _C.theory : _C.primary)),
-                    const SizedBox(width: 8),
-                    Text(theory ? '(Theory · ${q['marks']} marks)' : '(Multiple Choice)', style: const TextStyle(color: Color(0xFF666666), fontSize: 13)),
-                  ]),
-                  const SizedBox(height: 8),
-                  Text('${q['text']}', style: const TextStyle(fontSize: 15, height: 1.4, color: _C.text)),
-                  if (q['image_url'] != null) ...[
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: () => _zoom('${q['image_url']}'),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(color: const Color(0xFFFAFAFA), border: Border.all(color: const Color(0xFFDDDDDD)), borderRadius: BorderRadius.circular(5)),
-                        child: Image.network('${q['image_url']}', height: 110, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
-                      ),
-                    ),
-                  ],
-                  if (!theory) ...[
-                    const SizedBox(height: 10),
-                    for (int k = 0; k < options.length; k++)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.all(9),
-                        decoration: BoxDecoration(
-                          color: correct == k + 1 ? const Color(0xFFE8F5E9) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(children: [
-                          Text('${'ABCD'[k]}.  ', style: TextStyle(fontWeight: FontWeight.bold, color: correct == k + 1 ? Colors.green : _C.text)),
-                          Expanded(child: Text('${options[k]}', style: TextStyle(fontWeight: correct == k + 1 ? FontWeight.bold : FontWeight.normal, color: correct == k + 1 ? Colors.green : _C.text))),
-                          if (correct == k + 1) const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                        ]),
-                      ),
-                  ],
-                ]),
-              ),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: accent.withOpacity(0.2), width: 1.4), boxShadow: _soft(accent, 0.09)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(15), gradient: theory ? const LinearGradient(colors: [Color(0xFFFB923C), Color(0xFFEA580C)]) : _C.ctaGradient),
+            child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 19)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(theory ? 'Theory · ${q['marks']} marks' : 'Multiple choice', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5, color: Color.lerp(accent, Colors.black, 0.2)))),
+        ]),
+        const SizedBox(height: 14),
+        Text('${q['text']}', style: const TextStyle(fontSize: 17, height: 1.45, color: _C.text, fontWeight: FontWeight.w600)),
+        if (q['image_url'] != null) ...[
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () => _zoom('${q['image_url']}'),
+            child: Container(
+              decoration: BoxDecoration(color: _C.field, borderRadius: BorderRadius.circular(20), border: Border.all(color: _C.border)),
+              padding: const EdgeInsets.all(6),
+              child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.network('${q['image_url']}', height: 150, width: double.infinity, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox(height: 70, child: Center(child: Icon(Icons.broken_image_rounded))))),
             ),
-          ]),
-        ),
-      ),
+          ),
+        ],
+        if (!theory) ...[
+          const SizedBox(height: 14),
+          for (int k = 0; k < options.length; k++)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: correct == k + 1 ? _C.success.withOpacity(0.11) : _C.field, borderRadius: BorderRadius.circular(18), border: Border.all(color: correct == k + 1 ? _C.success : _C.border, width: correct == k + 1 ? 2 : 1.3)),
+              child: Row(children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(shape: BoxShape.circle, gradient: correct == k + 1 ? _C.goGradient : null, color: correct == k + 1 ? null : Colors.white, border: correct == k + 1 ? null : Border.all(color: _C.border, width: 1.6)),
+                  child: correct == k + 1 ? const Icon(Icons.check_rounded, color: Colors.white, size: 21) : Text('ABCD'[k], style: const TextStyle(fontWeight: FontWeight.w900, color: _C.primary)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('${options[k]}', style: TextStyle(fontSize: 16, fontWeight: correct == k + 1 ? FontWeight.w900 : FontWeight.w600, color: correct == k + 1 ? const Color(0xFF047857) : _C.text))),
+              ]),
+            ),
+        ],
+      ]),
     );
   }
 }
